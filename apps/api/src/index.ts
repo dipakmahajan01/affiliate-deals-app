@@ -1,0 +1,31 @@
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import { connectDB } from './db';
+import dealRoutes from './routes/deals';
+import channelRoutes from './routes/channels';
+import adminRoutes from './routes/admin';
+import productRoutes from './routes/products';
+import feedRoutes from './routes/feed';
+import authRoutes from './routes/auth';
+import { startPoller } from './services/poller';
+
+const app = express();
+const PORT = process.env.PORT ?? 4000;
+
+app.use(cors());
+app.use(express.json());
+
+app.use('/v1/deals', dealRoutes);
+app.use('/v1/channels', channelRoutes);
+app.use('/v1/admin', adminRoutes);
+app.use('/v1/products', productRoutes);
+app.use('/v1/feed', feedRoutes);
+app.use('/v1/auth', authRoutes);
+
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+connectDB().then(async () => {
+  app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+  await startPoller();
+});

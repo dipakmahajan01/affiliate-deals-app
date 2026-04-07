@@ -1,0 +1,61 @@
+name: Deploy Backend (API) → EC2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/types/**'
+      - 'pnpm-lock.yaml'
+
+jobs:
+  deploy-api:
+    name: Build & Deploy API → EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm --filter @deals/api build
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/${{ secrets.EC2_USER }}/affiliate-deals-app
+
+            echo "→ Pulling latest code..."
+            git pull origin main
+
+            echo "→ Installing dependencies..."
+            pnpm install --frozen-lockfile
+
+            echo "→ Building API..."
+            pnpm --filter @deals/api build
+
+            echo "→ Restarting API with PM2..."
+            pm2 restart api || pm2 start "pnpm --filter @deals/api start" --name api
+
+            echo "→ Saving PM2 process list..."
+            pm2 save
+
+            echo "✓ Deployment complete"
