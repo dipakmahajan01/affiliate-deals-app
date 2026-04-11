@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY ./packages ./packages
+COPY ./package.json ./package.json
+COPY ./pnpm-lock.yaml ./pnpm-lock.yaml
+COPY ./pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY ./turbo.json ./turbo.json
+COPY ./tsconfig.base.json ./tsconfig.base.json
+COPY ./apps/web ./apps/web
+RUN npm install -g pnpm
+RUN pnpm install
+RUN pnpm --filter @deals/web build
+
+EXPOSE 3000
+
+CMD ["pnpm", "run", "start:web"]
