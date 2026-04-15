@@ -2,11 +2,12 @@
   "name": "@deals/web",
   "version": "0.1.0",
   "scripts": {
-    "dev": "vite --port 3000",
+    "dev": "vite --port 3000 --host",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "start": "next start"
   },
   "dependencies": {
     "@deals/types": "workspace:*",
