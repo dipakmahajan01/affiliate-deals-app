@@ -12,6 +12,11 @@ import { scrapeProduct } from './scraper';
 // Channels whose messages get page-scraped into the products collection
 const SCRAPE_CHANNELS = new Set(['-1001803002117']);
 
+/** Escape special regex chars in a product title for safe case-insensitive matching. */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 let client: TelegramClient | null = null;
 
 // Cache: channel_username (stored in DB) → entity resolved from dialogs
@@ -87,6 +92,15 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
   const crossChannelDup = await Deal.findOne({ resolved_url: resolvedUrl }).select('_id').lean();
   if (crossChannelDup) return 'duplicate';
 
+  // Title+price dedup: skip if a deal with the same title (case-insensitive) and price exists
+  if (parsed.product_title && parsed.price !== null) {
+    const titlePriceDup = await Deal.findOne({
+      product_title: { $regex: new RegExp(`^${escapeRegex(parsed.product_title.trim())}$`, 'i') },
+      price: parsed.price,
+    }).select('_id').lean();
+    if (titlePriceDup) return 'duplicate';
+  }
+
   try {
     const result = await Deal.updateOne(
       { channel_id: channelUsername, message_id: msg.id },
@@ -146,6 +160,15 @@ async function processScrapedProduct(
   // Cross-channel dedup: skip if the same resolved URL already exists from any channel
   const crossChannelDup = await Product.findOne({ resolved_url: resolvedUrl }).select('_id').lean();
   if (crossChannelDup) return 'duplicate';
+
+  // Title+price dedup: skip if a product with the same title (case-insensitive) and price exists
+  if (parsed.product_title && parsed.price !== null) {
+    const titlePriceDup = await Product.findOne({
+      product_title: { $regex: new RegExp(`^${escapeRegex(parsed.product_title.trim())}$`, 'i') },
+      price: parsed.price,
+    }).select('_id').lean();
+    if (titlePriceDup) return 'duplicate';
+  }
 
   const scraped = await scrapeProduct(resolvedUrl, source);
   const scrapeStatus = scraped ? 'success' : 'failed';

@@ -51,6 +51,8 @@ const DealSchema = new Schema<DealDoc>(
 DealSchema.index({ channel_id: 1, message_id: 1 }, { unique: true });
 // Sparse unique index prevents the same product URL appearing from multiple channels
 DealSchema.index({ resolved_url: 1 }, { unique: true, sparse: true });
+// Fast lookup for title+price deduplication across channels
+DealSchema.index({ product_title: 1, price: 1 });
 DealSchema.index({ category: 1 });
 DealSchema.index({ product_title: 'text' });
 DealSchema.index({ clicks: -1, posted_at: -1 });
