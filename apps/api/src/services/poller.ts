@@ -88,11 +88,12 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
     return processScrapedProduct(channelUsername, msg, parsed, resolvedUrl, affiliateUrl, source, category);
   }
 
-  // Cross-channel dedup: skip if the same resolved URL already exists from any channel
-  const crossChannelDup = await Deal.findOne({ resolved_url: resolvedUrl }).select('_id').lean();
-  if (crossChannelDup) return 'duplicate';
+  // Affiliate URL dedup: same ASIN/Flipkart product always produces the same affiliate_url
+  // — this is the most reliable cross-channel duplicate check.
+  const affiliateUrlDup = await Deal.findOne({ affiliate_url: affiliateUrl }).select('_id').lean();
+  if (affiliateUrlDup) return 'duplicate';
 
-  // Title+price dedup: skip if a deal with the same title (case-insensitive) and price exists
+  // Title+price dedup: catches edge cases where the same product has a different URL variant
   if (parsed.product_title && parsed.price !== null) {
     const titlePriceDup = await Deal.findOne({
       product_title: { $regex: new RegExp(`^${escapeRegex(parsed.product_title.trim())}$`, 'i') },
@@ -157,11 +158,12 @@ async function processScrapedProduct(
   source: 'Amazon' | 'Flipkart',
   category: string
 ): Promise<'saved' | 'duplicate' | 'skipped'> {
-  // Cross-channel dedup: skip if the same resolved URL already exists from any channel
-  const crossChannelDup = await Product.findOne({ resolved_url: resolvedUrl }).select('_id').lean();
-  if (crossChannelDup) return 'duplicate';
+  // Affiliate URL dedup: same ASIN/Flipkart product always produces the same affiliate_url
+  // — this is the most reliable cross-channel duplicate check.
+  const affiliateUrlDup = await Product.findOne({ affiliate_url: affiliateUrl }).select('_id').lean();
+  if (affiliateUrlDup) return 'duplicate';
 
-  // Title+price dedup: skip if a product with the same title (case-insensitive) and price exists
+  // Title+price dedup: catches edge cases where the same product has a different URL variant
   if (parsed.product_title && parsed.price !== null) {
     const titlePriceDup = await Product.findOne({
       product_title: { $regex: new RegExp(`^${escapeRegex(parsed.product_title.trim())}$`, 'i') },

@@ -10,14 +10,14 @@ router.get('/', async (req: Request, res: Response) => {
   const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
   const skip = (page - 1) * limit;
 
-  // Deduplicate by resolved_url (same product from multiple channels shows only once).
-  // Docs without resolved_url (older records) fall back to their own _id so they still appear.
+  // Deduplicate by affiliate_url — same ASIN/product always produces the same affiliate_url,
+  // so this catches duplicates across all channels including old records without resolved_url.
   const [result] = await Product.aggregate([
     { $match: { is_active: true } },
     { $sort: { createdAt: -1 } },
     {
       $group: {
-        _id: { $ifNull: ['$resolved_url', { $toString: '$_id' }] },
+        _id: '$affiliate_url',
         doc: { $first: '$$ROOT' },
       },
     },
@@ -44,7 +44,7 @@ router.get('/trending', async (_req: Request, res: Response) => {
     { $sort: { clicks: -1 } },
     {
       $group: {
-        _id: { $ifNull: ['$resolved_url', { $toString: '$_id' }] },
+        _id: '$affiliate_url',
         doc: { $first: '$$ROOT' },
       },
     },
@@ -65,7 +65,7 @@ router.get('/search', async (req: Request, res: Response) => {
     { $sort: { score: { $meta: 'textScore' } } },
     {
       $group: {
-        _id: { $ifNull: ['$resolved_url', { $toString: '$_id' }] },
+        _id: '$affiliate_url',
         doc: { $first: '$$ROOT' },
       },
     },
@@ -88,7 +88,7 @@ router.get('/category/:cat', async (req: Request, res: Response) => {
     { $sort: { posted_at: -1 } },
     {
       $group: {
-        _id: { $ifNull: ['$resolved_url', { $toString: '$_id' }] },
+        _id: '$affiliate_url',
         doc: { $first: '$$ROOT' },
       },
     },
