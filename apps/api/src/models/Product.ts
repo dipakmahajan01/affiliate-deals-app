@@ -9,6 +9,7 @@ export interface ProductDoc extends Document {
   discount_percent?: number;
   coupon_text?: string;
   original_url: string;
+  resolved_url?: string;
   affiliate_url: string;
   image_url?: string;
   category: string;
@@ -36,6 +37,7 @@ const ProductSchema = new Schema<ProductDoc>(
     discount_percent: Number,
     coupon_text: String,
     original_url: { type: String, required: true },
+    resolved_url: { type: String },
     affiliate_url: { type: String, required: true },
     image_url: String,
     category: { type: String, default: 'General' },
@@ -56,6 +58,8 @@ const ProductSchema = new Schema<ProductDoc>(
 );
 
 ProductSchema.index({ channel_id: 1, message_id: 1 }, { unique: true });
+// Sparse unique index prevents the same product URL appearing from multiple channels
+ProductSchema.index({ resolved_url: 1 }, { unique: true, sparse: true });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ product_title: 'text', description: 'text' });
 ProductSchema.index({ clicks: -1, posted_at: -1 });

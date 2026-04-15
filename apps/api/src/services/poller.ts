@@ -64,9 +64,9 @@ async function getTelegramClient(): Promise<TelegramClient> {
 
 type RawMessage = { id: number; text?: string; date?: number };
 
-async function processMessage(channelUsername: string, msg: RawMessage): Promise<'saved' | 'duplicate' | 'skipped'> {
+async function  processMessage(channelUsername: string, msg: RawMessage): Promise<'saved' | 'duplicate' | 'skipped'> {
   if (!msg.text) return 'skipped';
-
+  console.log("msg.text", msg.text);
   const parsed = parseMessage(msg.text);
   if (!parsed.url || parsed.price === null) return 'skipped';
 
@@ -83,6 +83,10 @@ async function processMessage(channelUsername: string, msg: RawMessage): Promise
     return processScrapedProduct(channelUsername, msg, parsed, resolvedUrl, affiliateUrl, source, category);
   }
 
+  // Cross-channel dedup: skip if the same resolved URL already exists from any channel
+  const crossChannelDup = await Deal.findOne({ resolved_url: resolvedUrl }).select('_id').lean();
+  if (crossChannelDup) return 'duplicate';
+
   try {
     const result = await Deal.updateOne(
       { channel_id: channelUsername, message_id: msg.id },
@@ -95,6 +99,7 @@ async function processMessage(channelUsername: string, msg: RawMessage): Promise
           original_price: parsed.original_price ?? undefined,
           coupon_text: parsed.coupon_text ?? undefined,
           original_url: parsed.url,
+          resolved_url: resolvedUrl,
           affiliate_url: affiliateUrl,
           category,
           source,
@@ -138,6 +143,10 @@ async function processScrapedProduct(
   source: 'Amazon' | 'Flipkart',
   category: string
 ): Promise<'saved' | 'duplicate' | 'skipped'> {
+  // Cross-channel dedup: skip if the same resolved URL already exists from any channel
+  const crossChannelDup = await Product.findOne({ resolved_url: resolvedUrl }).select('_id').lean();
+  if (crossChannelDup) return 'duplicate';
+
   const scraped = await scrapeProduct(resolvedUrl, source);
   const scrapeStatus = scraped ? 'success' : 'failed';
 
@@ -153,6 +162,7 @@ async function processScrapedProduct(
           original_price: parsed.original_price ?? undefined,
           coupon_text: parsed.coupon_text ?? undefined,
           original_url: parsed.url ?? resolvedUrl,
+          resolved_url: resolvedUrl,
           affiliate_url: affiliateUrl,
           category,
           source,
@@ -185,12 +195,15 @@ async function pollChannel(channelUsername: string, limit = 100): Promise<void> 
 
   const entity = await resolveEntity(channelUsername) as Parameters<typeof tg.getMessages>[0];
   const messages = await tg.getMessages(entity, { limit });
+  console.log("messages", messages);
   console.log(`[Poller] Got ${messages.length} messages`);
 
   let saved = 0, skipped = 0, duplicates = 0;
 
   for (const msg of messages) {
+    console.log("msg", msg);
     const outcome = await processMessage(channelUsername, msg);
+    console.log("outcome", outcome);
     if (outcome === 'saved') saved++;
     else if (outcome === 'duplicate') duplicates++;
     else skipped++;
@@ -247,6 +260,7 @@ async function startRealtime(): Promise<void> {
 
     console.log(`[Realtime] New message in @${channelUsername} — msg#${msg.id}`);
     const outcome = await processMessage(channelUsername, msg);
+    console.log("outcome", outcome);
     if (outcome === 'saved') {
       console.log(`[Realtime] ✅ Deal saved from @${channelUsername} msg#${msg.id}`);
       await Channel.updateOne({ channel_username: channelUsername }, { last_polled_at: new Date() });
@@ -272,6 +286,8 @@ export async function startPoller(): Promise<void> {
   cron.schedule('*/10 * * * *', async () => {
     console.log(`\n[Poller] ⏰ Catch-up cron at ${new Date().toISOString()}`);
     const channels = await Channel.find({ is_active: true });
+    console.log(`[Poller] Polling ${channels.length} channels`);
+    console.log("channels", channels);
     for (const ch of channels) {
       try {
         await pollChannel(ch.channel_username);

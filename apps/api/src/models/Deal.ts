@@ -9,6 +9,7 @@ export interface DealDoc extends Document {
   discount_percent?: number;
   coupon_text?: string;
   original_url: string;
+  resolved_url?: string;
   affiliate_url: string;
   image_url?: string;
   rating?: number;
@@ -31,6 +32,7 @@ const DealSchema = new Schema<DealDoc>(
     discount_percent: Number,
     coupon_text: String,
     original_url: { type: String, required: true },
+    resolved_url: { type: String },
     affiliate_url: { type: String, required: true },
     image_url: String,
     rating: Number,
@@ -45,8 +47,10 @@ const DealSchema = new Schema<DealDoc>(
   { timestamps: true }
 );
 
-// Unique constraint to prevent duplicate messages
+// Unique constraint to prevent duplicate messages within the same channel
 DealSchema.index({ channel_id: 1, message_id: 1 }, { unique: true });
+// Sparse unique index prevents the same product URL appearing from multiple channels
+DealSchema.index({ resolved_url: 1 }, { unique: true, sparse: true });
 DealSchema.index({ category: 1 });
 DealSchema.index({ product_title: 'text' });
 DealSchema.index({ clicks: -1, posted_at: -1 });
