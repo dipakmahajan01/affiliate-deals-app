@@ -1,3 +1,16 @@
+/**
+ * Normalize a product title for deduplication:
+ * lowercase, replace all non-alphanumeric chars with spaces, collapse whitespace.
+ * This handles emoji, punctuation, and formatting differences across channels.
+ */
+export function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export interface ParsedDeal {
   product_title: string;
   price: number | null;

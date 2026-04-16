@@ -5,17 +5,13 @@ import { StringSession } from 'telegram/sessions/index.js';
 import { Channel } from '../models/Channel';
 import { Deal } from '../models/Deal';
 import { Product } from '../models/Product';
-import { parseMessage, categorize } from './parser';
+import { parseMessage, categorize, normalizeTitle } from './parser';
 import { resolveShortUrl, buildAffiliateUrl, detectSource } from './affiliate';
 import { scrapeProduct } from './scraper';
 
 // Channels whose messages get page-scraped into the products collection
 const SCRAPE_CHANNELS = new Set(['-1001803002117']);
 
-/** Escape special regex chars in a product title for safe case-insensitive matching. */
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 let client: TelegramClient | null = null;
 
@@ -90,16 +86,27 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
 
   // Affiliate URL dedup: same ASIN/Flipkart product always produces the same affiliate_url
   // — this is the most reliable cross-channel duplicate check.
-  const affiliateUrlDup = await Deal.findOne({ affiliate_url: affiliateUrl }).select('_id').lean();
-  if (affiliateUrlDup) return 'duplicate';
+  const affiliateUrlDup = await Deal.findOne({ affiliate_url: affiliateUrl }).select('_id product_title price').lean();
+  if (affiliateUrlDup) {
+    console.log(`[Poller] ⚠️  DUPLICATE (affiliate_url) skipped from @${channelUsername} msg#${msg.id}`);
+    console.log(`         Incoming : "${parsed.product_title}" @ ₹${parsed.price}`);
+    console.log(`         Existing : "${affiliateUrlDup.product_title}" @ ₹${affiliateUrlDup.price} (id: ${affiliateUrlDup._id})`);
+    return 'duplicate';
+  }
 
-  // Title+price dedup: catches edge cases where the same product has a different URL variant
+  // Title+price dedup: normalized comparison catches minor formatting differences across channels
+  const normTitle = normalizeTitle(parsed.product_title);
   if (parsed.product_title && parsed.price !== null) {
     const titlePriceDup = await Deal.findOne({
-      product_title: { $regex: new RegExp(`^${escapeRegex(parsed.product_title.trim())}$`, 'i') },
+      normalized_title: normTitle,
       price: parsed.price,
-    }).select('_id').lean();
-    if (titlePriceDup) return 'duplicate';
+    }).select('_id product_title price').lean();
+    if (titlePriceDup) {
+      console.log(`[Poller] ⚠️  DUPLICATE (title+price) skipped from @${channelUsername} msg#${msg.id}`);
+      console.log(`         Incoming : "${parsed.product_title}" @ ₹${parsed.price}`);
+      console.log(`         Existing : "${titlePriceDup.product_title}" @ ₹${titlePriceDup.price} (id: ${titlePriceDup._id})`);
+      return 'duplicate';
+    }
   }
 
   try {
@@ -110,6 +117,7 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
           channel_id: channelUsername,
           message_id: msg.id,
           product_title: parsed.product_title,
+          normalized_title: normTitle,
           price: parsed.price,
           original_price: parsed.original_price ?? undefined,
           coupon_text: parsed.coupon_text ?? undefined,
@@ -125,6 +133,7 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
     );
 
     if (result.upsertedCount > 0) {
+      console.log(`[Poller] ✅ SAVED deal from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
       // Scrape image in background — don't block the poll
       scrapeProduct(resolvedUrl, source).then((scraped) => {
         if (!scraped) return;
@@ -139,9 +148,13 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
       }).catch(() => {});
       return 'saved';
     }
+    console.log(`[Poller] ⚠️  DUPLICATE (channel+msg index) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
     return 'duplicate';
   } catch (err: unknown) {
-    if ((err as { code?: number }).code === 11000) return 'duplicate';
+    if ((err as { code?: number }).code === 11000) {
+      console.log(`[Poller] ⚠️  DUPLICATE (unique index conflict) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
+      return 'duplicate';
+    }
     console.error(`[Poller] ❌ DB error:`, err);
     return 'skipped';
   }
@@ -160,16 +173,27 @@ async function processScrapedProduct(
 ): Promise<'saved' | 'duplicate' | 'skipped'> {
   // Affiliate URL dedup: same ASIN/Flipkart product always produces the same affiliate_url
   // — this is the most reliable cross-channel duplicate check.
-  const affiliateUrlDup = await Product.findOne({ affiliate_url: affiliateUrl }).select('_id').lean();
-  if (affiliateUrlDup) return 'duplicate';
+  const affiliateUrlDup = await Product.findOne({ affiliate_url: affiliateUrl }).select('_id product_title price').lean();
+  if (affiliateUrlDup) {
+    console.log(`[Poller] ⚠️  DUPLICATE product (affiliate_url) skipped from @${channelUsername} msg#${msg.id}`);
+    console.log(`         Incoming : "${parsed.product_title}" @ ₹${parsed.price}`);
+    console.log(`         Existing : "${affiliateUrlDup.product_title}" @ ₹${affiliateUrlDup.price} (id: ${affiliateUrlDup._id})`);
+    return 'duplicate';
+  }
 
-  // Title+price dedup: catches edge cases where the same product has a different URL variant
+  // Title+price dedup: normalized comparison catches minor formatting differences across channels
+  const normTitle = normalizeTitle(parsed.product_title);
   if (parsed.product_title && parsed.price !== null) {
     const titlePriceDup = await Product.findOne({
-      product_title: { $regex: new RegExp(`^${escapeRegex(parsed.product_title.trim())}$`, 'i') },
+      normalized_title: normTitle,
       price: parsed.price,
-    }).select('_id').lean();
-    if (titlePriceDup) return 'duplicate';
+    }).select('_id product_title price').lean();
+    if (titlePriceDup) {
+      console.log(`[Poller] ⚠️  DUPLICATE product (title+price) skipped from @${channelUsername} msg#${msg.id}`);
+      console.log(`         Incoming : "${parsed.product_title}" @ ₹${parsed.price}`);
+      console.log(`         Existing : "${titlePriceDup.product_title}" @ ₹${titlePriceDup.price} (id: ${titlePriceDup._id})`);
+      return 'duplicate';
+    }
   }
 
   const scraped = await scrapeProduct(resolvedUrl, source);
@@ -184,6 +208,7 @@ async function processScrapedProduct(
           channel_id: channelUsername,
           message_id: msg.id,
           price: parsed.price!,
+          normalized_title: normTitle,
           original_price: parsed.original_price ?? undefined,
           coupon_text: parsed.coupon_text ?? undefined,
           original_url: parsed.url ?? resolvedUrl,
@@ -206,9 +231,17 @@ async function processScrapedProduct(
       },
       { upsert: true }
     );
-    return result.upsertedCount > 0 ? 'saved' : 'duplicate';
+    if (result.upsertedCount > 0) {
+      console.log(`[Poller] ✅ SAVED product from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
+      return 'saved';
+    }
+    console.log(`[Poller] ⚠️  DUPLICATE product (channel+msg index) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
+    return 'duplicate';
   } catch (err: unknown) {
-    if ((err as { code?: number }).code === 11000) return 'duplicate';
+    if ((err as { code?: number }).code === 11000) {
+      console.log(`[Poller] ⚠️  DUPLICATE product (unique index conflict) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
+      return 'duplicate';
+    }
     console.error(`[Poller] ❌ Product DB error:`, err);
     return 'skipped';
   }

@@ -4,6 +4,7 @@ export interface ProductDoc extends Document {
   channel_id: string;
   message_id: number;
   product_title: string;
+  normalized_title: string;
   price: number;
   original_price?: number;
   discount_percent?: number;
@@ -32,6 +33,7 @@ const ProductSchema = new Schema<ProductDoc>(
     channel_id: { type: String, required: true },
     message_id: { type: Number, required: true },
     product_title: { type: String, required: true },
+    normalized_title: { type: String },
     price: { type: Number, required: true },
     original_price: Number,
     discount_percent: Number,
@@ -62,8 +64,9 @@ ProductSchema.index({ channel_id: 1, message_id: 1 }, { unique: true });
 ProductSchema.index({ resolved_url: 1 }, { unique: true, sparse: true });
 // Fast lookup for affiliate_url deduplication across channels
 ProductSchema.index({ affiliate_url: 1 });
-// Fast lookup for title+price deduplication across channels
-ProductSchema.index({ product_title: 1, price: 1 });
+// Unique dedup index: normalized title + price prevents same product from being inserted twice
+// sparse:true so existing docs without normalized_title are excluded (no migration needed)
+ProductSchema.index({ normalized_title: 1, price: 1 }, { unique: true, sparse: true });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ product_title: 'text', description: 'text' });
 ProductSchema.index({ clicks: -1, posted_at: -1 });
