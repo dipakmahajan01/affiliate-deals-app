@@ -161,7 +161,7 @@ function scrapeAmazon(html: string): ScrapedProduct {
 
   const wrapper = $('#imgTagWrapperId');
   const imgEl = wrapper.find('img').first();
-  const image_url =
+  const rawImageUrl =
     (imgEl.attr('data-old-hires') as string | undefined) ||
     (wrapper.find('[data-old-hires]').first().attr('data-old-hires') as string | undefined) ||
     pickLargestDynamicImage(imgEl.attr('data-a-dynamic-image')) ||
@@ -169,6 +169,8 @@ function scrapeAmazon(html: string): ScrapedProduct {
     ($('#landingImage').attr('src') as string | undefined) ||
     (imgEl.attr('src') as string | undefined) ||
     undefined;
+  // Normalize: fix protocol-relative URLs (//m.media-amazon.com/...) and reject non-HTTP values
+  const image_url = normalizeHttpUrl(rawImageUrl);
 
   const description = $('#productDescription p').map((_, el) => $(el).text().trim()).get().filter(Boolean).join(' ') || undefined;
 

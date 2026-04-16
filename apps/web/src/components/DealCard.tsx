@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Deal } from '@deals/types';
 import { trackClickAndRedirect } from '../api/client';
 
@@ -38,6 +39,8 @@ function SourceBadge({ source }: { source: string }) {
 }
 
 export default function DealCard({ deal }: Props) {
+  const [imgFailed, setImgFailed] = useState(false);
+
   async function handleBuy() {
     await trackClickAndRedirect(deal._id, deal.item_type === 'product' ? 'products' : 'deals');
   }
@@ -79,12 +82,13 @@ export default function DealCard({ deal }: Props) {
           <SourceBadge source={deal.source} />
         </div>
 
-        {deal.image_url ? (
+        {deal.image_url && !imgFailed ? (
           <img
             src={deal.image_url}
             alt={deal.product_title}
             className="w-full h-48 object-contain p-4"
             loading="lazy"
+            onError={() => setImgFailed(true)}
           />
         ) : (
           <div className="w-full h-48 flex flex-col items-center justify-center text-slate-300 gap-1">
