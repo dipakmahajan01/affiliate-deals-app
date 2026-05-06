@@ -1,4 +1,4 @@
-export type DealSource = 'Amazon' | 'Flipkart';
+export type DealSource = 'Amazon' | 'Flipkart' | 'Myntra';
 export type Platform = 'ios' | 'android' | 'web';
 
 export interface Deal {
@@ -14,7 +14,7 @@ export interface Deal {
   original_url: string;
   affiliate_url: string;
   image_url?: string;
-  /** Present on scraped products (Amazon/Flipkart detail pages). */
+  /** Present on scraped products (Amazon/Flipkart/Myntra detail pages). */
   rating?: number;
   /** Short lines, e.g. Amazon bank discount cards. */
   bank_offers?: string[];
@@ -54,6 +54,8 @@ export interface AffiliateConfig {
   _id: string;
   amazon_tag: string;
   flipkart_affid: string;
+  /** Appended to resolved Myntra product URLs (e.g. `utm_source=...&utm_medium=...`). Leave empty to keep original short links like myntr.in when present. */
+  myntra_affiliate_suffix?: string;
   updated_at: string;
 }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
@@ -15,12 +15,54 @@ const CATEGORIES = [
 
 export default function Navbar() {
   const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/v1/feed/suggest?q=${encodeURIComponent(query.trim())}`);
+        const json = await res.json();
+        const s: string[] = json.suggestions ?? [];
+        setSuggestions(s);
+        setShowSuggestions(s.length > 0);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (query.trim()) navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+    if (query.trim()) {
+      setShowSuggestions(false);
+      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+    }
+  }
+
+  function pickSuggestion(title: string) {
+    setQuery(title);
+    setShowSuggestions(false);
+    navigate(`/search?q=${encodeURIComponent(title)}`);
   }
 
   return (
@@ -38,12 +80,14 @@ export default function Navbar() {
 
           {/* Search bar */}
           <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-auto">
-            <div className="relative">
+            <div ref={wrapperRef} className="relative">
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                 placeholder="Search deals, products, brands…"
                 className="w-full bg-slate-800 text-white placeholder-slate-400 rounded-full px-5 py-2 text-sm outline-none focus:ring-2 focus:ring-brand/50 transition pr-10"
+                autoComplete="off"
               />
               <button
                 type="submit"
@@ -52,6 +96,23 @@ export default function Navbar() {
               >
                 🔍
               </button>
+
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="absolute top-full mt-1 left-0 right-0 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                  {suggestions.map((s) => (
+                    <li key={s}>
+                      <button
+                        type="button"
+                        onMouseDown={() => pickSuggestion(s)}
+                        className="w-full text-left px-5 py-2.5 text-sm text-slate-200 hover:bg-slate-700 truncate flex items-center gap-2"
+                      >
+                        <span className="text-slate-400">🔍</span>
+                        {s}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </form>
 

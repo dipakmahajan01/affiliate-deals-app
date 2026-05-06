@@ -3,15 +3,12 @@ import { TelegramClient } from 'telegram';
 import { NewMessage, NewMessageEvent } from 'telegram/events/index.js';
 import { StringSession } from 'telegram/sessions/index.js';
 import { Channel } from '../models/Channel';
-import { Deal } from '../models/Deal';
+import { Message } from '../models/Message';
 import { Product } from '../models/Product';
 import { parseMessage, categorize, normalizeTitle } from './parser';
+import type { DealSource } from '@deals/types';
 import { resolveShortUrl, buildAffiliateUrl, detectSource } from './affiliate';
 import { scrapeProduct } from './scraper';
-
-// Channels whose messages get page-scraped into the products collection
-const SCRAPE_CHANNELS = new Set(['-1001803002117']);
-
 
 let client: TelegramClient | null = null;
 
@@ -68,96 +65,38 @@ type RawMessage = { id: number; text?: string; date?: number };
 async function  processMessage(channelUsername: string, msg: RawMessage): Promise<'saved' | 'duplicate' | 'skipped'> {
   if (!msg.text) return 'skipped';
   console.log("msg.text", msg.text);
+
+  // Persist raw message before any processing
+  await Message.updateOne(
+    { channel_id: channelUsername, message_id: msg.id },
+    {
+      $setOnInsert: {
+        channel_id: channelUsername,
+        message_id: msg.id,
+        channel_name: channelUsername,
+        raw_text: msg.text,
+        posted_at: new Date((msg.date ?? 0) * 1000),
+        has_url: /https?:\/\//i.test(msg.text),
+        processed: false,
+      },
+    },
+    { upsert: true }
+  ).catch(() => {});
+
   const parsed = parseMessage(msg.text);
   if (!parsed.url || parsed.price === null) return 'skipped';
 
   const resolvedUrl = await resolveShortUrl(parsed.url);
-  const source = detectSource(resolvedUrl);
+  let source = detectSource(resolvedUrl);
+  if (!source && parsed.url) source = detectSource(parsed.url);
   if (!source) return 'skipped';
 
-  const affiliateUrl = await buildAffiliateUrl(resolvedUrl);
+  const affiliateUrl = await buildAffiliateUrl(resolvedUrl, parsed.url);
   if (!affiliateUrl) return 'skipped';
 
   const category = categorize(parsed.product_title);
 
-  if (SCRAPE_CHANNELS.has(channelUsername)) {
-    return processScrapedProduct(channelUsername, msg, parsed, resolvedUrl, affiliateUrl, source, category);
-  }
-
-  // Affiliate URL dedup: same ASIN/Flipkart product always produces the same affiliate_url
-  // — this is the most reliable cross-channel duplicate check.
-  const affiliateUrlDup = await Deal.findOne({ affiliate_url: affiliateUrl }).select('_id product_title price').lean();
-  if (affiliateUrlDup) {
-    console.log(`[Poller] ⚠️  DUPLICATE (affiliate_url) skipped from @${channelUsername} msg#${msg.id}`);
-    console.log(`         Incoming : "${parsed.product_title}" @ ₹${parsed.price}`);
-    console.log(`         Existing : "${affiliateUrlDup.product_title}" @ ₹${affiliateUrlDup.price} (id: ${affiliateUrlDup._id})`);
-    return 'duplicate';
-  }
-
-  // Title+price dedup: normalized comparison catches minor formatting differences across channels
-  const normTitle = normalizeTitle(parsed.product_title);
-  if (parsed.product_title && parsed.price !== null) {
-    const titlePriceDup = await Deal.findOne({
-      normalized_title: normTitle,
-      price: parsed.price,
-    }).select('_id product_title price').lean();
-    if (titlePriceDup) {
-      console.log(`[Poller] ⚠️  DUPLICATE (title+price) skipped from @${channelUsername} msg#${msg.id}`);
-      console.log(`         Incoming : "${parsed.product_title}" @ ₹${parsed.price}`);
-      console.log(`         Existing : "${titlePriceDup.product_title}" @ ₹${titlePriceDup.price} (id: ${titlePriceDup._id})`);
-      return 'duplicate';
-    }
-  }
-
-  try {
-    const result = await Deal.updateOne(
-      { channel_id: channelUsername, message_id: msg.id },
-      {
-        $setOnInsert: {
-          channel_id: channelUsername,
-          message_id: msg.id,
-          product_title: parsed.product_title,
-          normalized_title: normTitle,
-          price: parsed.price,
-          original_price: parsed.original_price ?? undefined,
-          coupon_text: parsed.coupon_text ?? undefined,
-          original_url: parsed.url,
-          resolved_url: resolvedUrl,
-          affiliate_url: affiliateUrl,
-          category,
-          source,
-          posted_at: new Date((msg.date ?? 0) * 1000),
-        },
-      },
-      { upsert: true }
-    );
-
-    if (result.upsertedCount > 0) {
-      console.log(`[Poller] ✅ SAVED deal from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
-      // Scrape image in background — don't block the poll
-      scrapeProduct(resolvedUrl, source).then((scraped) => {
-        if (!scraped) return;
-        const patch: Record<string, unknown> = {};
-        if (scraped.title?.trim()) patch.product_title = scraped.title.trim();
-        if (scraped.image_url) patch.image_url = scraped.image_url;
-        if (scraped.rating != null) patch.rating = scraped.rating;
-        if (scraped.bank_offers?.length) patch.bank_offers = scraped.bank_offers;
-        if (Object.keys(patch).length > 0) {
-          Deal.updateOne({ channel_id: channelUsername, message_id: msg.id }, { $set: patch }).catch(() => {});
-        }
-      }).catch(() => {});
-      return 'saved';
-    }
-    console.log(`[Poller] ⚠️  DUPLICATE (channel+msg index) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
-    return 'duplicate';
-  } catch (err: unknown) {
-    if ((err as { code?: number }).code === 11000) {
-      console.log(`[Poller] ⚠️  DUPLICATE (unique index conflict) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
-      return 'duplicate';
-    }
-    console.error(`[Poller] ❌ DB error:`, err);
-    return 'skipped';
-  }
+  return processScrapedProduct(channelUsername, msg, parsed, resolvedUrl, affiliateUrl, source, category);
 }
 
 type ParsedDealPartial = { product_title: string; price: number | null; original_price?: number | null; coupon_text?: string | null; url?: string | null };
@@ -168,10 +107,10 @@ async function processScrapedProduct(
   parsed: ParsedDealPartial,
   resolvedUrl: string,
   affiliateUrl: string,
-  source: 'Amazon' | 'Flipkart',
+  source: DealSource,
   category: string
 ): Promise<'saved' | 'duplicate' | 'skipped'> {
-  // Affiliate URL dedup: same ASIN/Flipkart product always produces the same affiliate_url
+  // Affiliate URL dedup: same ASIN / Flipkart path / Myntra URL produces the same affiliate_url
   // — this is the most reliable cross-channel duplicate check.
   const affiliateUrlDup = await Product.findOne({ affiliate_url: affiliateUrl }).select('_id product_title price').lean();
   if (affiliateUrlDup) {
@@ -196,10 +135,10 @@ async function processScrapedProduct(
     }
   }
 
-  const scraped = await scrapeProduct(resolvedUrl, source);
-  const scrapeStatus = scraped ? 'success' : 'failed';
-
   try {
+    const scraped = await scrapeProduct(resolvedUrl, source).catch(() => null);
+    const scrapeStatus = scraped ? 'success' : 'failed';
+
     const postedAt = new Date((msg.date ?? 0) * 1000);
     const result = await Product.updateOne(
       { channel_id: channelUsername, message_id: msg.id },
@@ -233,6 +172,7 @@ async function processScrapedProduct(
     );
     if (result.upsertedCount > 0) {
       console.log(`[Poller] ✅ SAVED product from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
+      Message.updateOne({ channel_id: channelUsername, message_id: msg.id }, { $set: { processed: true } }).catch(() => {});
       return 'saved';
     }
     console.log(`[Poller] ⚠️  DUPLICATE product (channel+msg index) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
@@ -259,12 +199,15 @@ async function pollChannel(channelUsername: string, limit = 100): Promise<void> 
   let saved = 0, skipped = 0, duplicates = 0;
 
   for (const msg of messages) {
-    console.log("msg", msg);
-    const outcome = await processMessage(channelUsername, msg);
-    console.log("outcome", outcome);
-    if (outcome === 'saved') saved++;
-    else if (outcome === 'duplicate') duplicates++;
-    else skipped++;
+    try {
+      const outcome = await processMessage(channelUsername, msg);
+      if (outcome === 'saved') saved++;
+      else if (outcome === 'duplicate') duplicates++;
+      else skipped++;
+    } catch (err) {
+      console.error(`[Poller] ❌ Unhandled error processing msg#${(msg as { id?: number }).id}:`, err);
+      skipped++;
+    }
   }
 
   await Channel.updateOne({ channel_username: channelUsername }, { last_polled_at: new Date() });

@@ -33,7 +33,7 @@ export default defineConfig({
   server: {
     allowedHosts: ["dealdost.shop", "www.dealdost.shop"],
     proxy: {
-      '/v1': 'http://localhost:4000',
+      '/v1': 'http://localhost:5000',
     },
   },
 });

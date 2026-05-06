@@ -50,6 +50,32 @@ router.get('/trending', async (_req: Request, res: Response) => {
   res.json({ data });
 });
 
+// GET /v1/feed/suggest?q=  — autocomplete suggestions
+router.get('/suggest', async (req: Request, res: Response) => {
+  const q = (req.query.q as string)?.trim();
+  if (!q || q.length < 2) return res.json({ suggestions: [] });
+
+  const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const filter = { is_active: true, product_title: regex };
+
+  const [deals, products] = await Promise.all([
+    Deal.find(filter).select('product_title').limit(6).lean(),
+    Product.find(filter).select('product_title').limit(6).lean(),
+  ]);
+
+  const seen = new Set<string>();
+  const suggestions: string[] = [];
+  for (const item of [...deals, ...products]) {
+    const t = (item as { product_title?: string }).product_title;
+    if (t && !seen.has(t) && suggestions.length < 8) {
+      seen.add(t);
+      suggestions.push(t);
+    }
+  }
+
+  res.json({ suggestions });
+});
+
 // GET /v1/feed/search?q=
 router.get('/search', async (req: Request, res: Response) => {
   const q = (req.query.q as string)?.trim();

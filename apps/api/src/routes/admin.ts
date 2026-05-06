@@ -112,12 +112,16 @@ router.get('/affiliate-config', async (_req: Request, res: Response) => {
 
 // PATCH /v1/admin/affiliate-config
 router.patch('/affiliate-config', async (req: Request, res: Response) => {
-  const { amazon_tag, flipkart_affid } = req.body;
-  const config = await AffiliateConfig.findOneAndUpdate(
-    {},
-    { amazon_tag, flipkart_affid },
-    { upsert: true, new: true }
-  ).lean();
+  const { amazon_tag, flipkart_affid, myntra_affiliate_suffix } = req.body as {
+    amazon_tag?: string;
+    flipkart_affid?: string;
+    myntra_affiliate_suffix?: string;
+  };
+  const $set: Record<string, string> = {};
+  if (amazon_tag !== undefined) $set.amazon_tag = amazon_tag;
+  if (flipkart_affid !== undefined) $set.flipkart_affid = flipkart_affid;
+  if (myntra_affiliate_suffix !== undefined) $set.myntra_affiliate_suffix = myntra_affiliate_suffix;
+  const config = await AffiliateConfig.findOneAndUpdate({}, { $set }, { upsert: true, new: true }).lean();
   res.json(config);
 });
 

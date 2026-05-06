@@ -16,7 +16,7 @@ export interface DealDoc extends Document {
   rating?: number;
   bank_offers?: string[];
   category: string;
-  source: 'Amazon' | 'Flipkart';
+  source: 'Amazon' | 'Flipkart' | 'Myntra';
   posted_at: Date;
   views: number;
   clicks: number;
@@ -40,7 +40,7 @@ const DealSchema = new Schema<DealDoc>(
     rating: Number,
     bank_offers: [String],
     category: { type: String, default: 'General' },
-    source: { type: String, enum: ['Amazon', 'Flipkart'], required: true },
+    source: { type: String, enum: ['Amazon', 'Flipkart', 'Myntra'], required: true },
     posted_at: { type: Date, default: Date.now },
     views: { type: Number, default: 0 },
     clicks: { type: Number, default: 0 },

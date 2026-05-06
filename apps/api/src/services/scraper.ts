@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import type { CheerioAPI } from 'cheerio';
+import type { DealSource } from '@deals/types';
 
 export interface ScrapedProduct {
   title?: string;
@@ -300,7 +301,7 @@ function flipkartImagePixelScore(url: string): number {
   return max;
 }
 
-/** Flipkart serves images from rukminim*.flixcart.com; class-based img tags break often. */
+/** Flipkart serves product images from rukminim*.flixcart.com/image/...; everything under /www/ is UI chrome (promo overlays, badges, sprites). */
 function bestRukminimImageFromHtml(html: string): string | undefined {
   const re = /https?:\/\/rukminim\d+\.flixcart\.com\/image\/[^"'\\\s<>]+/gi;
   const seen = new Set<string>();
@@ -308,7 +309,7 @@ function bestRukminimImageFromHtml(html: string): string | undefined {
   while ((m = re.exec(html)) !== null) {
     let u = m[0].replace(/\\u002f/gi, '/').replace(/\\\//g, '/');
     u = u.split('?')[0];
-    if (/placeholder|spinner|loading|icon-?only|logo|banner|sprite/i.test(u)) continue;
+    if (/placeholder|spinner|loading|icon-?only|logo|banner|sprite|promos?\//i.test(u)) continue;
     seen.add(u);
   }
   let best: string | undefined;
@@ -320,6 +321,52 @@ function bestRukminimImageFromHtml(html: string): string | undefined {
       best = u;
     }
   }
+  return best;
+}
+
+/** Parse a srcset attribute and return the URL with the highest pixel density / dimension. */
+function pickLargestFromSrcset(srcset: string | undefined): string | undefined {
+  if (!srcset) return undefined;
+  const candidates: { url: string; score: number }[] = [];
+  for (const part of srcset.split(',')) {
+    const tokens = part.trim().split(/\s+/);
+    const url = tokens[0];
+    if (!url || !/^https?:\/\//i.test(url)) continue;
+    if (/img\.youtube\.com|\/promos?\//i.test(url)) continue;
+    const descriptor = tokens[1] ?? '';
+    const dpr = descriptor.endsWith('x') ? parseFloat(descriptor) : 0;
+    const wd = descriptor.endsWith('w') ? parseFloat(descriptor) : 0;
+    const dim = flipkartImagePixelScore(url);
+    candidates.push({ url, score: Math.max(dim, wd, dpr * 1000) });
+  }
+  if (!candidates.length) return undefined;
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].url;
+}
+
+/** Walk the Flipkart PDP carousel (div.P56aSK / div.OfydJ4) and pick the largest <picture> source. */
+function bestFlipkartCarouselImage($: CheerioAPI): string | undefined {
+  let best: string | undefined;
+  let bestScore = 0;
+  const consider = (raw: string | undefined) => {
+    const u = normalizeHttpUrl(raw);
+    if (!u) return;
+    if (/img\.youtube\.com|\/promos?\//i.test(u)) return;
+    if (!/rukminim\d+\.flixcart\.com\/image\//i.test(u)) return;
+    const s = flipkartImagePixelScore(u);
+    if (s > bestScore) {
+      bestScore = s;
+      best = u.split('?')[0];
+    }
+  };
+  $('div.P56aSK picture, div.OfydJ4 picture, picture').each((_, pic) => {
+    $(pic).find('source').each((__, src) => {
+      consider(pickLargestFromSrcset($(src).attr('srcset')));
+    });
+    const img = $(pic).find('img').first();
+    consider(pickLargestFromSrcset(img.attr('srcset')));
+    consider(img.attr('src'));
+  });
   return best;
 }
 
@@ -439,15 +486,15 @@ function scrapeFlipkartLegacyDom($: CheerioAPI): Partial<ScrapedProduct> {
     $('h1').first().text().trim() ||
     undefined;
 
-  // Image — try current selectors; rukminim regex is the real fallback (handled above)
+  // Image — prefer the carousel walk (highest-res from <picture><source srcset>); fall back to
+  // legacy class-based img selectors. The rukminim regex is the final safety net.
   const domImg =
+    bestFlipkartCarouselImage($) ||
     normalizeHttpUrl($('img.DByuf4').attr('src')) ||          // 2024+ main product img
     normalizeHttpUrl($('img._53J4C-').attr('src')) ||          // another 2024 variant
     normalizeHttpUrl($('img._396cs4').attr('src')) ||
     normalizeHttpUrl($('div._3kidJX img').attr('src')) ||
-    normalizeHttpUrl($('img[loading="eager"]').first().attr('src')) ||
-    normalizeHttpUrl($('picture source').first().attr('srcset')?.split(' ')[0]) ||
-    normalizeHttpUrl($('picture img').first().attr('src'));
+    normalizeHttpUrl($('img[loading="eager"]').first().attr('src'));
 
   const description =
     $('div._1mXcCf p').map((_, el) => $(el).text().trim()).get().filter(Boolean).join(' ') ||
@@ -509,18 +556,70 @@ function scrapeFlipkart(html: string): ScrapedProduct {
   };
 }
 
-export async function scrapeProduct(
-  url: string,
-  source: 'Amazon' | 'Flipkart'
-): Promise<ScrapedProduct | null> {
-  console.log(`[Scraper] Scraping ${source} page: ${url.slice(0, 80)}...`);
-  const html = source === 'Flipkart' ? await fetchFlipkart(url) : await fetchWithRetry(url);
+function scrapeMyntra(html: string): ScrapedProduct {
+  const $ = cheerio.load(html);
+  const title =
+    $('meta[property="og:title"]').attr('content')?.trim() ||
+    $('meta[name="twitter:title"]').attr('content')?.trim();
+  const image_url =
+    normalizeHttpUrl($('meta[property="og:image"]').attr('content')) ||
+    normalizeHttpUrl($('meta[name="twitter:image"]').attr('content'));
+  return { title: title || undefined, image_url };
+}
+
+// dl.flipkart.com deep links don't serve HTML product pages — convert to www.flipkart.com
+function normalizeFlipkartUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== 'dl.flipkart.com') return url;
+
+    if (parsed.pathname.startsWith('/dl/')) {
+      // App deep link format: /dl/a/p/{itemId}?pid={pid} — construct minimal product URL
+      const pid = parsed.searchParams.get('pid');
+      const pathMatch = parsed.pathname.match(/\/(itm[a-z0-9]+)/i);
+      const itemId = pathMatch?.[1];
+      if (pid && itemId) return `https://www.flipkart.com/product/p/${itemId}?pid=${pid}`;
+      if (pid) return `https://www.flipkart.com/product/p/itm?pid=${pid}`;
+      return url;
+    }
+
+    // Slug-based deep link: /realme-p4x.../p/itm...?pid=... — just swap hostname
+    parsed.hostname = 'www.flipkart.com';
+    return parsed.toString();
+  } catch { /* ignore */ }
+  return url;
+}
+
+function isAmazonCaptcha(html: string): boolean {
+  return (
+    html.includes('/errors/validateCaptcha') ||
+    html.includes('Type the characters you see') ||
+    html.includes('Enter the characters you see') ||
+    html.includes('api-services-support.amazon.com')
+  );
+}
+
+export async function scrapeProduct(url: string, source: DealSource): Promise<ScrapedProduct | null> {
+  let scrapingUrl = url;
+  if (source === 'Flipkart') scrapingUrl = normalizeFlipkartUrl(url);
+  console.log(`[Scraper] Scraping ${source} page: ${scrapingUrl.slice(0, 80)}...`);
+
+  let html: string | null = null;
+  if (source === 'Flipkart') html = await fetchFlipkart(scrapingUrl);
+  else html = await fetchWithRetry(scrapingUrl);
+
   if (!html) {
     console.log(`[Scraper] Failed to fetch page`);
     return null;
   }
 
-  const result = source === 'Amazon' ? scrapeAmazon(html) : scrapeFlipkart(html);
+  if (source === 'Amazon' && isAmazonCaptcha(html)) {
+    console.log(`[Scraper] Amazon CAPTCHA detected — skipping scrape`);
+    return null;
+  }
+
+  const result =
+    source === 'Amazon' ? scrapeAmazon(html) : source === 'Flipkart' ? scrapeFlipkart(html) : scrapeMyntra(html);
   console.log(
     `[Scraper] title="${result.title?.slice(0, 50)}" image=${!!result.image_url} rating=${result.rating} bankOffers=${result.bank_offers?.length ?? 0}`
   );

@@ -6,6 +6,7 @@ import { api } from '../api/client';
 export default function AffiliateConfig() {
   const [amazonTag, setAmazonTag] = useState('');
   const [flipkartId, setFlipkartId] = useState('');
+  const [myntraSuffix, setMyntraSuffix] = useState('');
   const qc = useQueryClient();
 
   const { data } = useQuery<AffConfig>({
@@ -17,11 +18,17 @@ export default function AffiliateConfig() {
     if (data) {
       setAmazonTag(data.amazon_tag ?? '');
       setFlipkartId(data.flipkart_affid ?? '');
+      setMyntraSuffix(data.myntra_affiliate_suffix ?? '');
     }
   }, [data]);
 
   const save = useMutation({
-    mutationFn: () => api.patch('/admin/affiliate-config', { amazon_tag: amazonTag, flipkart_affid: flipkartId }),
+    mutationFn: () =>
+      api.patch('/admin/affiliate-config', {
+        amazon_tag: amazonTag,
+        flipkart_affid: flipkartId,
+        myntra_affiliate_suffix: myntraSuffix,
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'affiliate-config'] }),
   });
 
@@ -54,6 +61,20 @@ export default function AffiliateConfig() {
             className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400"
           />
           <p className="text-xs text-gray-400 mt-1">Appended as ?affid=youraffid to all Flipkart URLs</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Myntra URL suffix (optional)</label>
+          <input
+            value={myntraSuffix}
+            onChange={(e) => setMyntraSuffix(e.target.value)}
+            placeholder="utm_source=…&utm_medium=…"
+            className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Appended to resolved myntra.com product URLs. Leave empty to keep incoming short links (e.g. myntr.in)
+            when messages use them.
+          </p>
         </div>
 
         <button

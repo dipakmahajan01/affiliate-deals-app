@@ -7,11 +7,12 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "server": "tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "backfill:images": "tsx src/scripts/backfill-images.ts"
   },
   "dependencies": {
     "@deals/types": "workspace:*",

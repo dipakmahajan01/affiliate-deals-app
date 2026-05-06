@@ -14,7 +14,7 @@ export interface ProductDoc extends Document {
   affiliate_url: string;
   image_url?: string;
   category: string;
-  source: 'Amazon' | 'Flipkart';
+  source: 'Amazon' | 'Flipkart' | 'Myntra';
   posted_at: Date;
   views: number;
   clicks: number;
@@ -43,7 +43,7 @@ const ProductSchema = new Schema<ProductDoc>(
     affiliate_url: { type: String, required: true },
     image_url: String,
     category: { type: String, default: 'General' },
-    source: { type: String, enum: ['Amazon', 'Flipkart'], required: true },
+    source: { type: String, enum: ['Amazon', 'Flipkart', 'Myntra'], required: true },
     posted_at: { type: Date, default: Date.now },
     views: { type: Number, default: 0 },
     clicks: { type: Number, default: 0 },
