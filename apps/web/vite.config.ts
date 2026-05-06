@@ -8,8 +8,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Deals App',
-        short_name: 'Deals',
+        name: 'DealDost — Best Amazon & Flipkart Deals from Telegram',
+        short_name: 'DealDost',
         description: 'Best Amazon & Flipkart deals from Telegram',
         theme_color: '#f97316',
         background_color: '#ffffff',

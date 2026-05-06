@@ -15,7 +15,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-gray-100">
       <aside className="w-56 bg-gray-900 text-white flex flex-col">
-        <div className="px-5 py-4 text-lg font-bold border-b border-gray-700">Deals Admin</div>
+        <div className="px-5 py-4 text-lg font-bold border-b border-gray-700">DealDost Admin</div>
         <nav className="flex-1 py-4">
           {NAV.map(({ to, label }) => (
             <NavLink

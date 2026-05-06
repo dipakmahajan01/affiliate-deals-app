@@ -92,6 +92,7 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
   if (!source) return 'skipped';
 
   const affiliateUrl = await buildAffiliateUrl(resolvedUrl, parsed.url);
+  console.log("affiliateUrl", affiliateUrl);
   if (!affiliateUrl) return 'skipped';
 
   const category = categorize(parsed.product_title);

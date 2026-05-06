@@ -73,8 +73,8 @@ export default function Navbar() {
           {/* Logo */}
           <Link to="/" className="shrink-0 flex items-center gap-1.5">
             <span className="text-2xl font-black tracking-tight">
-              <span className="text-brand">Deals</span>
-              <span className="text-white">Hub</span>
+              <span className="text-brand">Deal</span>
+              <span className="text-white">Dost</span>
             </span>
           </Link>
 
