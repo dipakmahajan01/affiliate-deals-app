@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Deal } from '@deals/types';
-import { trackClickAndRedirect } from '../api/client';
+import { useDealClick } from '../hooks/useDealClick';
 
 interface Props {
   deal: Deal;
@@ -40,9 +40,10 @@ function SourceBadge({ source }: { source: string }) {
 
 export default function DealCard({ deal }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
+  const handleDealClick = useDealClick();
 
   async function handleBuy() {
-    await trackClickAndRedirect(deal._id, deal.item_type === 'product' ? 'products' : 'deals');
+    await handleDealClick(deal._id, deal.item_type === 'product' ? 'products' : 'deals');
   }
 
   const discount =

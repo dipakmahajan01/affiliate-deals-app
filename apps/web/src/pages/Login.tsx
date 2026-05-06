@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next');
+  const reason = (location.state as { reason?: string } | null)?.reason;
   const { setAuth } = useAuthStore();
 
   const [form, setForm] = useState({ email: '', password: '' });
@@ -18,7 +22,7 @@ export default function Login() {
     try {
       const { data } = await api.post('/auth/login', form);
       setAuth(data.token, data.user);
-      navigate('/');
+      navigate(next ? decodeURIComponent(next) : '/');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
@@ -45,6 +49,11 @@ export default function Login() {
           </div>
 
           <div className="p-8">
+            {reason && !error && (
+              <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-xl">
+                {reason}
+              </div>
+            )}
             {error && (
               <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
                 {error}
@@ -95,7 +104,10 @@ export default function Login() {
 
             <p className="text-center mt-6 text-sm text-slate-500">
               Don&apos;t have an account?{' '}
-              <Link to="/signup" className="text-brand font-semibold hover:underline">
+              <Link
+                to={next ? `/signup?next=${next}` : '/signup'}
+                className="text-brand font-semibold hover:underline"
+              >
                 Sign Up
               </Link>
             </p>

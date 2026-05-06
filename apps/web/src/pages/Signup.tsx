@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next');
   const { setAuth } = useAuthStore();
 
   const [form, setForm] = useState({ name: '', email: '', password: '' });
@@ -22,7 +24,7 @@ export default function Signup() {
     try {
       const { data } = await api.post('/auth/register', form);
       setAuth(data.token, data.user);
-      navigate('/');
+      navigate(next ? decodeURIComponent(next) : '/');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
@@ -115,7 +117,10 @@ export default function Signup() {
 
             <p className="text-center mt-6 text-sm text-slate-500">
               Already have an account?{' '}
-              <Link to="/login" className="text-brand font-semibold hover:underline">
+              <Link
+                to={next ? `/login?next=${next}` : '/login'}
+                className="text-brand font-semibold hover:underline"
+              >
                 Sign In
               </Link>
             </p>

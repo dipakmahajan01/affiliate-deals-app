@@ -1,10 +1,12 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Deal } from '@deals/types';
-import { api, trackClickAndRedirect } from '../api/client';
+import { api } from '../api/client';
+import { useDealClick } from '../hooks/useDealClick';
 
 export default function DealDetail() {
   const { id } = useParams<{ id: string }>();
+  const handleDealClick = useDealClick();
   const { data: deal, isLoading } = useQuery<Deal>({
     queryKey: ['deal', id],
     queryFn: () => api.get(`/deals/${id}`).then((r) => r.data),
@@ -111,7 +113,7 @@ export default function DealDetail() {
           </div>
 
           <button
-            onClick={() => trackClickAndRedirect(deal._id, deal.item_type === 'product' ? 'products' : 'deals')}
+            onClick={() => handleDealClick(deal._id, deal.item_type === 'product' ? 'products' : 'deals')}
             className="w-full bg-brand hover:bg-brand-600 text-white font-bold py-4 rounded-xl transition text-base shadow-sm"
           >
             Buy Now on {deal.source}
