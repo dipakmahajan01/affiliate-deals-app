@@ -27,5 +27,14 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 connectDB().then(async () => {
   app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
-  await startPoller();
+  startPoller().catch((err) => {
+    console.error('[Poller] failed to start — API will continue without it:', err);
+  });
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
 });

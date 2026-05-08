@@ -79,19 +79,30 @@ router.get('/suggest', async (req: Request, res: Response) => {
 // GET /v1/feed/search?q=
 router.get('/search', async (req: Request, res: Response) => {
   const q = (req.query.q as string)?.trim();
-  if (!q) return res.json({ data: [] });
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
 
-  const textFilter = { is_active: true, $text: { $search: q } };
-  const [deals, products] = await Promise.all([
-    Deal.find(textFilter).sort({ score: { $meta: 'textScore' } }).limit(30).lean() as Promise<FeedItem[]>,
-    Product.find(textFilter).sort({ score: { $meta: 'textScore' } }).limit(30).lean() as Promise<FeedItem[]>,
+  if (!q) return res.json({ data: [], page, limit, total: 0, hasMore: false });
+
+  const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const filter = { is_active: true, product_title: regex };
+  const fetch = page * limit;
+
+  const [deals, products, dealCount, productCount] = await Promise.all([
+    Deal.find(filter).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
+    Product.find(filter).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
+    Deal.countDocuments(filter),
+    Product.countDocuments(filter),
   ]);
 
-  const data = [...tag(deals, 'deal'), ...tag(products, 'product')]
-    .sort((a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime())
-    .slice(0, 30);
+  const merged = [...tag(deals, 'deal'), ...tag(products, 'product')]
+    .sort((a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime());
 
-  res.json({ data });
+  const skip = (page - 1) * limit;
+  const data = merged.slice(skip, skip + limit);
+  const total = dealCount + productCount;
+
+  res.json({ data, page, limit, total, hasMore: skip + data.length < total });
 });
 
 // GET /v1/feed/category/:cat

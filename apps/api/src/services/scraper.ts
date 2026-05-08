@@ -88,6 +88,37 @@ async function fetchFlipkart(url: string): Promise<string | null> {
   return null;
 }
 
+async function fetchMyntra(url: string): Promise<string | null> {
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    try {
+      const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+      const resp = await axios.get(url, {
+        headers: {
+          'User-Agent': ua,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-IN,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate',
+          'Referer': 'https://www.myntra.com/',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        timeout: 15000,
+        maxRedirects: 5,
+      });
+      return resp.data as string;
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      const isRetryable = !status || status >= 500 || status === 429;
+      if (attempt < 2 && isRetryable) {
+        await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+        continue;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
 function pickLargestDynamicImage(dataDynamic: string | undefined): string | undefined {
   if (!dataDynamic) return undefined;
   try {
@@ -558,13 +589,43 @@ function scrapeFlipkart(html: string): ScrapedProduct {
 
 function scrapeMyntra(html: string): ScrapedProduct {
   const $ = cheerio.load(html);
-  const title =
-    $('meta[property="og:title"]').attr('content')?.trim() ||
-    $('meta[name="twitter:title"]').attr('content')?.trim();
-  const image_url =
-    normalizeHttpUrl($('meta[property="og:image"]').attr('content')) ||
-    normalizeHttpUrl($('meta[name="twitter:image"]').attr('content'));
-  return { title: title || undefined, image_url };
+
+  // 1) PDP — JSON-LD Product schema
+  let ldTitle: string | undefined;
+  let ldImage: string | undefined;
+  $('script[type="application/ld+json"]').each((_, el) => {
+    try {
+      const nodes = JSON.parse($(el).contents().text());
+      const arr = Array.isArray(nodes) ? nodes : [nodes];
+      for (const n of arr) {
+        if (n?.['@type'] === 'Product') {
+          ldTitle ??= typeof n.name === 'string' ? n.name : undefined;
+          const img = Array.isArray(n.image) ? n.image[0] : n.image;
+          ldImage ??= typeof img === 'string' ? img : undefined;
+        }
+      }
+    } catch { /* ignore */ }
+  });
+
+  // 2) Meta tags
+  const ogTitle = $('meta[property="og:title"]').attr('content')?.trim();
+  const twTitle = $('meta[name="twitter:title"]').attr('content')?.trim();
+  const ogImage = $('meta[property="og:image"]').attr('content');
+  const twImage = $('meta[name="twitter:image"]').attr('content');
+
+  // 3) Listing page fallback — first Myntra CDN image in the HTML
+  let cdnImage: string | undefined;
+  const cdnMatch = html.match(/https?:\/\/assets\.myntassets\.com\/[^\s"'<>]+?\.(?:jpg|jpeg|png|webp)/i);
+  if (cdnMatch) cdnImage = cdnMatch[0];
+
+  return {
+    title: ldTitle || ogTitle || twTitle || undefined,
+    image_url:
+      normalizeHttpUrl(ldImage) ||
+      normalizeHttpUrl(ogImage) ||
+      normalizeHttpUrl(twImage) ||
+      normalizeHttpUrl(cdnImage),
+  };
 }
 
 // dl.flipkart.com deep links don't serve HTML product pages — convert to www.flipkart.com
@@ -606,6 +667,7 @@ export async function scrapeProduct(url: string, source: DealSource): Promise<Sc
 
   let html: string | null = null;
   if (source === 'Flipkart') html = await fetchFlipkart(scrapingUrl);
+  else if (source === 'Myntra') html = await fetchMyntra(scrapingUrl);
   else html = await fetchWithRetry(scrapingUrl);
 
   if (!html) {

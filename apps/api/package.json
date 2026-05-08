@@ -12,7 +12,8 @@
     "start": "node dist/index.js",
     "lint": "eslint src",
     "clean": "rm -rf dist",
-    "backfill:images": "tsx src/scripts/backfill-images.ts"
+    "backfill:images": "tsx src/scripts/backfill-images.ts",
+    "refresh:myntra": "tsx src/scripts/refresh-myntra-images.ts"
   },
   "dependencies": {
     "@deals/types": "workspace:*",
