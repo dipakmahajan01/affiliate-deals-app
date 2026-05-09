@@ -9,6 +9,7 @@ import productRoutes from './routes/products';
 import feedRoutes from './routes/feed';
 import authRoutes from './routes/auth';
 import { startPoller } from './services/poller';
+import { startRefreshCron } from './services/refresh';
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -30,6 +31,7 @@ connectDB().then(async () => {
   startPoller().catch((err) => {
     console.error('[Poller] failed to start — API will continue without it:', err);
   });
+  startRefreshCron();
 });
 
 process.on('unhandledRejection', (err) => {

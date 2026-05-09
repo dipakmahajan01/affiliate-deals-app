@@ -45,22 +45,38 @@ export function parseMessage(rawText: string): ParsedDeal {
 
   // Extract price — priority:
   // 1. @price (e.g. "Fan @2750") — most reliable in Telegram deal messages
-  // 2. ₹price NOT followed by "off" (skip coupon discount amounts like "₹800 Off Coupon")
+  // 2. First ₹price not adjacent to MRP/cashback/off keywords. We check chars *before* ₹ for
+  //    MRP-like keywords (the ₹ is the strike-through price) and *after* for coupon-like keywords
+  //    (the ₹ is a discount amount). Whatever survives is the actual buy price.
   const atPriceMatch = rawText.match(/@(\d[\d,]+)/);
-  const rupeeMatches = [...rawText.matchAll(/₹(\d[\d,]+)/gi)];
-  const nonCouponRupee = rupeeMatches.find((m) => {
-    const after = rawText.slice((m.index ?? 0) + m[0].length, (m.index ?? 0) + m[0].length + 15).toLowerCase();
-    return !after.match(/^\s*off\b/);
-  });
+  const COUPON_AFTER = /^\s*(off|cashback|discount|coupon|extra|cb)\b/i;
+  const MRP_BEFORE = /(?:\b(?:mrp|m\.r\.p\.?|original|originally|was|list\s*price)\b)\s*[:\-]?\s*$/i;
+  const rupeeCandidates = [...rawText.matchAll(/₹\s*(\d[\d,]+)/gi)]
+    .map((m) => {
+      const idx = m.index ?? 0;
+      const before = rawText.slice(Math.max(0, idx - 25), idx);
+      const after = rawText.slice(idx + m[0].length, idx + m[0].length + 25);
+      return {
+        value: parseInt(m[1].replace(/,/g, ''), 10),
+        isCouponLike: COUPON_AFTER.test(after),
+        isMrpLike: MRP_BEFORE.test(before),
+      };
+    })
+    .filter((c) => Number.isFinite(c.value) && c.value > 0);
+  const cleanCandidates = rupeeCandidates.filter((c) => !c.isCouponLike && !c.isMrpLike);
+  const pickFrom = cleanCandidates.length ? cleanCandidates : rupeeCandidates;
+  const firstRupee = pickFrom[0] ?? null;
   const rawPrice = atPriceMatch
     ? parseInt(atPriceMatch[1].replace(/,/g, ''), 10)
-    : nonCouponRupee
-    ? parseInt(nonCouponRupee[1].replace(/,/g, ''), 10)
+    : firstRupee
+    ? firstRupee.value
     : null;
   const price = rawPrice;
 
-  // Try to find an original/MRP price
-  const mrpMatch = rawText.match(/(?:mrp|original|was)[^\d]*(\d[\d,]+)/i);
+  // Try to find an original/MRP price.
+  // Require an optional ₹/Rs prefix and forbid a `%` immediately after the digits, so
+  // "MRP 50% Off ₹8000" captures 8000 (via ₹), not 50.
+  const mrpMatch = rawText.match(/(?:mrp|original|was)[^\d]*?(?:₹|rs\.?\s*)\s*(\d[\d,]+)(?!\s*%)/i);
   const original_price = mrpMatch ? parseInt(mrpMatch[1].replace(/,/g, ''), 10) : null;
 
   // Extract coupon text — grab the coupon instruction but strip the product name after "|"

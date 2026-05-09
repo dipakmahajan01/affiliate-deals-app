@@ -121,24 +121,30 @@ async function processScrapedProduct(
     return 'duplicate';
   }
 
-  // Title+price dedup: normalized comparison catches minor formatting differences across channels
   const normTitle = normalizeTitle(parsed.product_title);
-  if (parsed.product_title && parsed.price !== null) {
-    const titlePriceDup = await Product.findOne({
-      normalized_title: normTitle,
-      price: parsed.price,
-    }).select('_id product_title price').lean();
-    if (titlePriceDup) {
-      console.log(`[Poller] ⚠️  DUPLICATE product (title+price) skipped from @${channelUsername} msg#${msg.id}`);
-      console.log(`         Incoming : "${parsed.product_title}" @ ₹${parsed.price}`);
-      console.log(`         Existing : "${titlePriceDup.product_title}" @ ₹${titlePriceDup.price} (id: ${titlePriceDup._id})`);
-      return 'duplicate';
-    }
-  }
 
   try {
     const scraped = await scrapeProduct(resolvedUrl, source).catch(() => null);
     const scrapeStatus = scraped ? 'success' : 'failed';
+
+    // Prefer scraped (live) price over the parsed Telegram price; fall back to parsed if scrape failed.
+    const finalPrice = scraped?.price ?? parsed.price!;
+    const finalOriginalPrice = scraped?.original_price ?? parsed.original_price ?? undefined;
+
+    // Title+price dedup runs against the *final* price, not the parsed-from-message price, so the
+    // same product reposted in two channels with different message text doesn't insert twice.
+    if (parsed.product_title && finalPrice != null) {
+      const titlePriceDup = await Product.findOne({
+        normalized_title: normTitle,
+        price: finalPrice,
+      }).select('_id product_title price').lean();
+      if (titlePriceDup) {
+        console.log(`[Poller] ⚠️  DUPLICATE product (title+price) skipped from @${channelUsername} msg#${msg.id}`);
+        console.log(`         Incoming : "${parsed.product_title}" @ ₹${finalPrice}`);
+        console.log(`         Existing : "${titlePriceDup.product_title}" @ ₹${titlePriceDup.price} (id: ${titlePriceDup._id})`);
+        return 'duplicate';
+      }
+    }
 
     const postedAt = new Date((msg.date ?? 0) * 1000);
     const result = await Product.updateOne(
@@ -147,9 +153,8 @@ async function processScrapedProduct(
         $setOnInsert: {
           channel_id: channelUsername,
           message_id: msg.id,
-          price: parsed.price!,
+          price: finalPrice,
           normalized_title: normTitle,
-          original_price: parsed.original_price ?? undefined,
           coupon_text: parsed.coupon_text ?? undefined,
           original_url: parsed.url ?? resolvedUrl,
           resolved_url: resolvedUrl,
@@ -162,6 +167,8 @@ async function processScrapedProduct(
           product_title: (scraped?.title?.trim() || parsed.product_title) as string,
           scrape_status: scrapeStatus,
           scraped_at: new Date(),
+          ...(scraped?.price != null ? { price: scraped.price } : {}),
+          ...(finalOriginalPrice != null ? { original_price: finalOriginalPrice } : {}),
           ...(scraped?.image_url ? { image_url: scraped.image_url } : {}),
           ...(scraped?.description ? { description: scraped.description } : {}),
           ...(scraped?.rating != null ? { rating: scraped.rating } : {}),
@@ -172,11 +179,12 @@ async function processScrapedProduct(
       { upsert: true }
     );
     if (result.upsertedCount > 0) {
-      console.log(`[Poller] ✅ SAVED product from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
+      const priceSrc = scraped?.price != null ? 'scraped' : 'parsed';
+      console.log(`[Poller] ✅ SAVED product from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${finalPrice} (${priceSrc})`);
       Message.updateOne({ channel_id: channelUsername, message_id: msg.id }, { $set: { processed: true } }).catch(() => {});
       return 'saved';
     }
-    console.log(`[Poller] ⚠️  DUPLICATE product (channel+msg index) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
+    console.log(`[Poller] ⚠️  DUPLICATE product (channel+msg index) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${finalPrice}`);
     return 'duplicate';
   } catch (err: unknown) {
     if ((err as { code?: number }).code === 11000) {

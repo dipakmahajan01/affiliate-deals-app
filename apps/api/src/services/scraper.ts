@@ -8,8 +8,20 @@ export interface ScrapedProduct {
   image_url?: string;
   description?: string;
   rating?: number;
+  price?: number;
+  original_price?: number;
   features?: string[];
   bank_offers?: string[];
+}
+
+/** Convert "₹1,499.00" / "Rs. 1499" / "1499" to a positive integer. Returns undefined if not a sane price. */
+function parsePriceText(raw: string | undefined | null): number | undefined {
+  if (!raw) return undefined;
+  const cleaned = raw.replace(/[₹$Rs.,\s]/gi, '').match(/\d+(\.\d+)?/);
+  if (!cleaned) return undefined;
+  const n = parseFloat(cleaned[0]);
+  if (!Number.isFinite(n) || n <= 0 || n > 10_000_000) return undefined;
+  return Math.round(n);
 }
 
 const USER_AGENTS = [
@@ -159,6 +171,31 @@ function parseAmazonRating($: CheerioAPI): number | undefined {
   return undefined;
 }
 
+function parseAmazonPrice($: CheerioAPI): { price?: number; original_price?: number } {
+  const tryPrice = (sel: string): number | undefined =>
+    parsePriceText($(sel).first().text());
+
+  const price =
+    tryPrice('#corePriceDisplay_desktop_feature_div .a-price[data-a-strike="false"] .a-offscreen') ||
+    tryPrice('#corePriceDisplay_desktop_feature_div .priceToPay .a-offscreen') ||
+    tryPrice('#corePrice_feature_div .a-price[data-a-strike="false"] .a-offscreen') ||
+    tryPrice('#corePrice_feature_div .a-offscreen') ||
+    tryPrice('span.priceToPay .a-offscreen') ||
+    tryPrice('#priceblock_dealprice') ||
+    tryPrice('#priceblock_ourprice') ||
+    tryPrice('#priceblock_saleprice') ||
+    tryPrice('.a-price .a-offscreen');
+
+  const original_price =
+    tryPrice('#corePriceDisplay_desktop_feature_div .basisPrice .a-offscreen') ||
+    tryPrice('#corePriceDisplay_desktop_feature_div span[data-a-strike="true"] .a-offscreen') ||
+    tryPrice('span.basisPrice .a-offscreen') ||
+    tryPrice('span[data-a-strike="true"] .a-offscreen') ||
+    tryPrice('.a-text-strike');
+
+  return { price, original_price };
+}
+
 function scrapeAmazonBankOffers($: CheerioAPI): string[] {
   const lines: string[] = [];
   const seen = new Set<string>();
@@ -207,6 +244,7 @@ function scrapeAmazon(html: string): ScrapedProduct {
   const description = $('#productDescription p').map((_, el) => $(el).text().trim()).get().filter(Boolean).join(' ') || undefined;
 
   const rating = parseAmazonRating($);
+  const { price, original_price } = parseAmazonPrice($);
 
   const features = $('#feature-bullets ul li span.a-list-item')
     .map((_, el) => $(el).text().trim())
@@ -221,6 +259,8 @@ function scrapeAmazon(html: string): ScrapedProduct {
     image_url,
     description,
     rating,
+    price,
+    original_price,
     features: features.length ? features : undefined,
     bank_offers: bank_offers.length ? bank_offers : undefined,
   };
@@ -280,6 +320,14 @@ function productHintsFromJsonLdObject(o: Record<string, unknown>): Partial<Scrap
       const n = parseFloat(rv);
       if (!Number.isNaN(n)) hint.rating = n;
     }
+  }
+  const offers = o.offers as Record<string, unknown> | Record<string, unknown>[] | undefined;
+  const offerList = Array.isArray(offers) ? offers : offers ? [offers] : [];
+  for (const off of offerList) {
+    const p = parsePriceText(typeof off?.price === 'number' ? String(off.price) : (off?.price as string | undefined));
+    if (p && hint.price == null) hint.price = p;
+    const hp = parsePriceText(typeof off?.highPrice === 'number' ? String(off.highPrice) : (off?.highPrice as string | undefined));
+    if (hp && hint.original_price == null) hint.original_price = hp;
   }
   return hint;
 }
@@ -434,6 +482,8 @@ function mergeFlipkartPartial(parts: Partial<ScrapedProduct>[]): Partial<Scraped
     if (p.image_url && !merged.image_url) merged.image_url = p.image_url;
     if (p.description && !merged.description) merged.description = p.description;
     if (p.rating != null && merged.rating == null) merged.rating = p.rating;
+    if (p.price != null && merged.price == null) merged.price = p.price;
+    if (p.original_price != null && merged.original_price == null) merged.original_price = p.original_price;
   }
   return merged;
 }
@@ -503,6 +553,36 @@ function extractFlipkartEmbeddedJson(html: string): Partial<ScrapedProduct> {
     if (!Number.isNaN(n) && n >= 1 && n <= 5) out.rating = n;
   }
 
+  // Selling price (current price) from JSON
+  const priceRe = /"(?:finalPrice|sellingPrice|prices?)"\s*:\s*\{?[^{}]*?"value"\s*:\s*(\d+)/;
+  const priceM = html.match(priceRe);
+  if (priceM) {
+    const p = parsePriceText(priceM[1]);
+    if (p) out.price = p;
+  } else {
+    const altRe = /"(?:finalPrice|sellingPrice)"\s*:\s*(\d+)/;
+    const altM = html.match(altRe);
+    if (altM) {
+      const p = parsePriceText(altM[1]);
+      if (p) out.price = p;
+    }
+  }
+
+  // MRP / original price from JSON
+  const mrpRe = /"mrp"\s*:\s*\{?[^{}]*?"value"\s*:\s*(\d+)/;
+  const mrpM = html.match(mrpRe);
+  if (mrpM) {
+    const p = parsePriceText(mrpM[1]);
+    if (p) out.original_price = p;
+  } else {
+    const altMrp = /"mrp"\s*:\s*(\d+)/;
+    const altMrpM = html.match(altMrp);
+    if (altMrpM) {
+      const p = parsePriceText(altMrpM[1]);
+      if (p) out.original_price = p;
+    }
+  }
+
   return out;
 }
 
@@ -543,7 +623,20 @@ function scrapeFlipkartLegacyDom($: CheerioAPI): Partial<ScrapedProduct> {
   const ratingDom = ratingText ? parseFloat(ratingText) : NaN;
   const rating = !Number.isNaN(ratingDom) && ratingDom >= 1 && ratingDom <= 5 ? ratingDom : undefined;
 
-  return { title: title || undefined, image_url: domImg, description, rating };
+  // Price — Flipkart 2024+ uses Nx9bqj.CxhGGd; older pages use _30jeq3._16Jk6d
+  const price =
+    parsePriceText($('div.Nx9bqj.CxhGGd').first().text()) ||
+    parsePriceText($('div._30jeq3._16Jk6d').first().text()) ||
+    parsePriceText($('div._30jeq3').first().text()) ||
+    parsePriceText($('div[class*="price"] div').first().text());
+
+  // MRP / strike-through original price
+  const original_price =
+    parsePriceText($('div.yRaY8j').first().text()) ||
+    parsePriceText($('div._3I9_wc._2p6lqe').first().text()) ||
+    parsePriceText($('div._3I9_wc').first().text());
+
+  return { title: title || undefined, image_url: domImg, description, rating, price, original_price };
 }
 
 function scrapeFlipkart(html: string): ScrapedProduct {
@@ -582,6 +675,8 @@ function scrapeFlipkart(html: string): ScrapedProduct {
     image_url: normalizeHttpUrl(base.image_url),
     description: base.description,
     rating: base.rating,
+    price: base.price,
+    original_price: base.original_price,
     features: features.length ? features : undefined,
     bank_offers: bank_offers.length ? bank_offers : undefined,
   };
@@ -593,6 +688,8 @@ function scrapeMyntra(html: string): ScrapedProduct {
   // 1) PDP — JSON-LD Product schema
   let ldTitle: string | undefined;
   let ldImage: string | undefined;
+  let ldPrice: number | undefined;
+  let ldRating: number | undefined;
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
       const nodes = JSON.parse($(el).contents().text());
@@ -602,6 +699,15 @@ function scrapeMyntra(html: string): ScrapedProduct {
           ldTitle ??= typeof n.name === 'string' ? n.name : undefined;
           const img = Array.isArray(n.image) ? n.image[0] : n.image;
           ldImage ??= typeof img === 'string' ? img : undefined;
+          const offer = Array.isArray(n.offers) ? n.offers[0] : n.offers;
+          if (offer && ldPrice == null) {
+            ldPrice = parsePriceText(typeof offer.price === 'number' ? String(offer.price) : offer.price);
+          }
+          const ar = n.aggregateRating;
+          if (ar && ldRating == null) {
+            const rv = typeof ar.ratingValue === 'string' ? parseFloat(ar.ratingValue) : ar.ratingValue;
+            if (typeof rv === 'number' && rv >= 1 && rv <= 5) ldRating = rv;
+          }
         }
       }
     } catch { /* ignore */ }
@@ -618,6 +724,32 @@ function scrapeMyntra(html: string): ScrapedProduct {
   const cdnMatch = html.match(/https?:\/\/assets\.myntassets\.com\/[^\s"'<>]+?\.(?:jpg|jpeg|png|webp)/i);
   if (cdnMatch) cdnImage = cdnMatch[0];
 
+  // 4) DOM price selectors
+  const domPrice =
+    parsePriceText($('.pdp-price strong').first().text()) ||
+    parsePriceText($('span.pdp-price').first().text()) ||
+    parsePriceText($('span[class*="discountedPrice"]').first().text());
+  const domMrp =
+    parsePriceText($('.pdp-mrp s').first().text()) ||
+    parsePriceText($('.pdp-mrp').first().text()) ||
+    parsePriceText($('span[class*="strike"]').first().text());
+
+  // 5) DOM rating (PDP shows rating in .index-overallRating div)
+  const ratingText =
+    $('.index-overallRating').first().text().trim() ||
+    $('div[class*="overallRating"]').first().text().trim() ||
+    '';
+  const ratingDom = ratingText ? parseFloat(ratingText) : NaN;
+  const domRating = !Number.isNaN(ratingDom) && ratingDom >= 1 && ratingDom <= 5 ? ratingDom : undefined;
+
+  // 6) Inline JSON fallback for price (Myntra ships pdpData as JSON in a script tag)
+  let jsonPrice: number | undefined;
+  let jsonMrp: number | undefined;
+  const priceM = html.match(/"discountedPrice"\s*:\s*(\d+)/);
+  if (priceM) jsonPrice = parsePriceText(priceM[1]);
+  const mrpM = html.match(/"mrp"\s*:\s*(\d+)/);
+  if (mrpM) jsonMrp = parsePriceText(mrpM[1]);
+
   return {
     title: ldTitle || ogTitle || twTitle || undefined,
     image_url:
@@ -625,6 +757,9 @@ function scrapeMyntra(html: string): ScrapedProduct {
       normalizeHttpUrl(ogImage) ||
       normalizeHttpUrl(twImage) ||
       normalizeHttpUrl(cdnImage),
+    rating: ldRating ?? domRating,
+    price: ldPrice ?? domPrice ?? jsonPrice,
+    original_price: domMrp ?? jsonMrp,
   };
 }
 
@@ -683,7 +818,7 @@ export async function scrapeProduct(url: string, source: DealSource): Promise<Sc
   const result =
     source === 'Amazon' ? scrapeAmazon(html) : source === 'Flipkart' ? scrapeFlipkart(html) : scrapeMyntra(html);
   console.log(
-    `[Scraper] title="${result.title?.slice(0, 50)}" image=${!!result.image_url} rating=${result.rating} bankOffers=${result.bank_offers?.length ?? 0}`
+    `[Scraper] title="${result.title?.slice(0, 50)}" image=${!!result.image_url} rating=${result.rating} price=${result.price} mrp=${result.original_price} bankOffers=${result.bank_offers?.length ?? 0}`
   );
   return result;
 }
