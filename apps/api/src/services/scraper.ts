@@ -682,7 +682,7 @@ function scrapeFlipkart(html: string): ScrapedProduct {
   };
 }
 
-function scrapeMyntra(html: string): ScrapedProduct {
+export function scrapeMyntra(html: string): ScrapedProduct {
   const $ = cheerio.load(html);
 
   // 1) PDP — JSON-LD Product schema
@@ -713,18 +713,34 @@ function scrapeMyntra(html: string): ScrapedProduct {
     } catch { /* ignore */ }
   });
 
-  // 2) Meta tags
+  // 2) PDP DOM title — Myntra splits brand and name into two <h1> tags
+  const pdpBrand = $('h1.pdp-title').first().text().trim();
+  const pdpName = $('h1.pdp-name').first().text().trim();
+  const pdpTitle = [pdpBrand, pdpName].filter(Boolean).join(' ').trim() || undefined;
+
+  // 3) Meta tags
   const ogTitle = $('meta[property="og:title"]').attr('content')?.trim();
   const twTitle = $('meta[name="twitter:title"]').attr('content')?.trim();
   const ogImage = $('meta[property="og:image"]').attr('content');
   const twImage = $('meta[name="twitter:image"]').attr('content');
 
-  // 3) Listing page fallback — first Myntra CDN image in the HTML
+  // 4) PDP DOM image — Myntra renders product photos as inline `background-image: url(...)`
+  // on `.image-grid-image` divs. Cheerio decodes the &quot; entities, so the style attribute
+  // looks like: `background-image: url("https://assets.myntassets.com/.../...jpg");`
+  let domBgImage: string | undefined;
+  $('.image-grid-image').each((_, el) => {
+    if (domBgImage) return;
+    const style = $(el).attr('style') ?? '';
+    const m = style.match(/url\(\s*['"]?\s*(https?:\/\/[^)"'\s]+)/i);
+    if (m && m[1]) domBgImage = m[1];
+  });
+
+  // 5) Generic Myntra CDN regex fallback — first asset URL anywhere in the raw HTML
   let cdnImage: string | undefined;
-  const cdnMatch = html.match(/https?:\/\/assets\.myntassets\.com\/[^\s"'<>]+?\.(?:jpg|jpeg|png|webp)/i);
+  const cdnMatch = html.match(/https?:\/\/assets\.myntassets\.com\/[^\s"'<>)]+?\.(?:jpg|jpeg|png|webp)/i);
   if (cdnMatch) cdnImage = cdnMatch[0];
 
-  // 4) DOM price selectors
+  // 6) DOM price selectors
   const domPrice =
     parsePriceText($('.pdp-price strong').first().text()) ||
     parsePriceText($('span.pdp-price').first().text()) ||
@@ -734,7 +750,7 @@ function scrapeMyntra(html: string): ScrapedProduct {
     parsePriceText($('.pdp-mrp').first().text()) ||
     parsePriceText($('span[class*="strike"]').first().text());
 
-  // 5) DOM rating (PDP shows rating in .index-overallRating div)
+  // 7) DOM rating (PDP shows rating in .index-overallRating div)
   const ratingText =
     $('.index-overallRating').first().text().trim() ||
     $('div[class*="overallRating"]').first().text().trim() ||
@@ -742,7 +758,7 @@ function scrapeMyntra(html: string): ScrapedProduct {
   const ratingDom = ratingText ? parseFloat(ratingText) : NaN;
   const domRating = !Number.isNaN(ratingDom) && ratingDom >= 1 && ratingDom <= 5 ? ratingDom : undefined;
 
-  // 6) Inline JSON fallback for price (Myntra ships pdpData as JSON in a script tag)
+  // 8) Inline JSON fallback for price (Myntra ships pdpData as JSON in a script tag)
   let jsonPrice: number | undefined;
   let jsonMrp: number | undefined;
   const priceM = html.match(/"discountedPrice"\s*:\s*(\d+)/);
@@ -750,13 +766,18 @@ function scrapeMyntra(html: string): ScrapedProduct {
   const mrpM = html.match(/"mrp"\s*:\s*(\d+)/);
   if (mrpM) jsonMrp = parsePriceText(mrpM[1]);
 
+  // PDP description — pull product details paragraph if present
+  const descPdp = $('.pdp-product-description-content').first().text().replace(/\s+/g, ' ').trim();
+
   return {
-    title: ldTitle || ogTitle || twTitle || undefined,
+    title: pdpTitle || ldTitle || ogTitle || twTitle || undefined,
     image_url:
       normalizeHttpUrl(ldImage) ||
+      normalizeHttpUrl(domBgImage) ||
       normalizeHttpUrl(ogImage) ||
       normalizeHttpUrl(twImage) ||
       normalizeHttpUrl(cdnImage),
+    description: descPdp || undefined,
     rating: ldRating ?? domRating,
     price: ldPrice ?? domPrice ?? jsonPrice,
     original_price: domMrp ?? jsonMrp,
