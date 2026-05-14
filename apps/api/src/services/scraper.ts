@@ -682,8 +682,101 @@ function scrapeFlipkart(html: string): ScrapedProduct {
   };
 }
 
+/** Myntra often ships `style="background-image: url(&quot;https://...&quot;)"` — entities may stay literal in parsed attrs. */
+function decodeInlineStyleEntities(raw: string): string {
+  return raw
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*34;/g, '"')
+    .replace(/&#x0*22;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&#0*39;/g, "'")
+    .replace(/&#x0*27;/gi, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function extractUrlFromBackgroundImageStyle(style: string): string | undefined {
+  const decoded = decodeInlineStyleEntities(style);
+  const m = decoded.match(/url\(\s*["']?(https?:\/\/[^)"'\s]+)["']?\s*\)/i);
+  if (m?.[1]) return m[1].trim();
+  const m2 = style.match(/url\(\s*&quot;(https?:\/\/[^"&]+?)&quot;\s*\)/i);
+  if (m2?.[1]) return decodeInlineStyleEntities(m2[1]).trim();
+  return undefined;
+}
+
+/** Score Myntra CDN URLs for srcset / carousel picking (w_, dpr). */
+function myntraAssetUrlScore(url: string): number {
+  let s = 0;
+  const w = url.match(/[,/_]w_(\d+)/i);
+  if (w) s += parseInt(w[1], 10);
+  const dpr = url.match(/dpr[_=]([\d.]+)/i);
+  if (dpr) s += parseFloat(dpr[1]) * 500;
+  const h = url.match(/[,/_]h_(\d+)/i);
+  if (h) s += parseInt(h[1], 10) * 0.5;
+  return s;
+}
+
+/**
+ * Search / category PLP (`ul.results-base` + `li.product-base`) — product image is in
+ * `<picture><source srcset="...">` / `<img class="img-responsive">`, not PDP `.image-grid-image`.
+ */
+function scrapeMyntraPlpFirstProduct($: CheerioAPI): Partial<ScrapedProduct> | undefined {
+  const $lis = $('ul.results-base li.product-base, li.product-base').filter((_, el) => {
+    const $li = $(el);
+    if ($li.hasClass('results-liDummy')) return false;
+    return (
+      $li.find('picture').length > 0 ||
+      $li.find('img.img-responsive[src*="myntassets"], img[src*="assets.myntassets"]').length > 0
+    );
+  });
+  const $li = $lis.first();
+  if (!$li.length) return undefined;
+
+  let image_url: string | undefined;
+  const $pic = $li.find('picture').first();
+  if ($pic.length) {
+    let best: string | undefined;
+    let bestScore = 0;
+    const consider = (raw: string | undefined) => {
+      const u = normalizeHttpUrl(raw?.trim().split(/\s+/)[0]);
+      if (!u || !/assets\.myntassets\.com/i.test(u)) return;
+      const sc = myntraAssetUrlScore(u) + flipkartImagePixelScore(u);
+      if (sc >= bestScore) {
+        bestScore = sc;
+        best = u.split('?')[0];
+      }
+    };
+    $pic.find('source[srcset]').each((_, src) => consider(pickLargestFromSrcset($(src).attr('srcset'))));
+    const $img = $pic.find('img').first();
+    consider(pickLargestFromSrcset($img.attr('srcset')));
+    consider($img.attr('src'));
+    image_url = best;
+  }
+  if (!image_url) {
+    const src = $li.find('img.img-responsive[src], img[src*="myntassets"]').first().attr('src');
+    image_url = normalizeHttpUrl(src?.trim());
+  }
+  if (!image_url) return undefined;
+
+  const brand = $li.find('h3.product-brand').first().text().trim();
+  const name = $li.find('h4.product-product').first().text().trim();
+  const title =
+    [brand, name].filter(Boolean).join(' ').trim() ||
+    $li.find('img[alt]').first().attr('alt')?.replace(/\s+/g, ' ').trim();
+
+  const price = parsePriceText($li.find('.product-discountedPrice').first().text());
+  const original_price = parsePriceText($li.find('.product-strike').first().text());
+
+  const ratingText = $li.find('.product-ratingsContainer > span').first().text().trim();
+  const rv = parseFloat(ratingText);
+  const rating = !Number.isNaN(rv) && rv >= 1 && rv <= 5 ? rv : undefined;
+
+  return { title: title || undefined, image_url, price, original_price, rating };
+}
+
 export function scrapeMyntra(html: string): ScrapedProduct {
   const $ = cheerio.load(html);
+
+  const plpHints = scrapeMyntraPlpFirstProduct($);
 
   // 1) PDP — JSON-LD Product schema
   let ldTitle: string | undefined;
@@ -724,20 +817,39 @@ export function scrapeMyntra(html: string): ScrapedProduct {
   const ogImage = $('meta[property="og:image"]').attr('content');
   const twImage = $('meta[name="twitter:image"]').attr('content');
 
-  // 4) PDP DOM image — Myntra renders product photos as inline `background-image: url(...)`
-  // on `.image-grid-image` divs. Cheerio decodes the &quot; entities, so the style attribute
-  // looks like: `background-image: url("https://assets.myntassets.com/.../...jpg");`
+  // 4) PDP DOM image — Myntra image grid uses divs with `background-image: url(...)`; URLs are often
+  // HTML-entity–quoted as `url(&quot;https://...&quot;)` which does not match a naive `url("...")` regex.
   let domBgImage: string | undefined;
   $('.image-grid-image').each((_, el) => {
     if (domBgImage) return;
     const style = $(el).attr('style') ?? '';
-    const m = style.match(/url\(\s*['"]?\s*(https?:\/\/[^)"'\s]+)/i);
-    if (m && m[1]) domBgImage = m[1];
+    const u = extractUrlFromBackgroundImageStyle(style);
+    if (u && /assets\.myntassets\.com/i.test(u)) domBgImage = u;
   });
 
-  // 5) Generic Myntra CDN regex fallback — first asset URL anywhere in the raw HTML
+  // 4b) Raw HTML fallback — same pattern when Cheerio omits or alters the attribute
+  if (!domBgImage) {
+    const tagRe = /<div\b(?=[^>]*\bclass="[^"]*\bimage-grid-image\b)[^>]*>/gi;
+    let tm: RegExpExecArray | null;
+    while ((tm = tagRe.exec(html)) !== null) {
+      const tag = tm[0];
+      const styleAttr = tag.match(/\bstyle="([^"]*)"/i);
+      if (!styleAttr?.[1]) continue;
+      const u = extractUrlFromBackgroundImageStyle(styleAttr[1]);
+      if (u && /assets\.myntassets\.com/i.test(u)) {
+        domBgImage = u;
+        break;
+      }
+    }
+  }
+
+  // 5) Generic Myntra CDN regex fallback — first clean asset URL in raw HTML (collapse whitespace so
+  // multiline `srcset` blocks still match).
   let cdnImage: string | undefined;
-  const cdnMatch = html.match(/https?:\/\/assets\.myntassets\.com\/[^\s"'<>)]+?\.(?:jpg|jpeg|png|webp)/i);
+  const cdnCompact = html.replace(/\s+/g, ' ');
+  const cdnMatch = cdnCompact.match(
+    /https?:\/\/assets\.myntassets\.com\/[^"'\\s<>]+?\.(?:jpg|jpeg|png|webp)/i
+  );
   if (cdnMatch) cdnImage = cdnMatch[0];
 
   // 6) DOM price selectors
@@ -770,17 +882,18 @@ export function scrapeMyntra(html: string): ScrapedProduct {
   const descPdp = $('.pdp-product-description-content').first().text().replace(/\s+/g, ' ').trim();
 
   return {
-    title: pdpTitle || ldTitle || ogTitle || twTitle || undefined,
+    title: pdpTitle || plpHints?.title || ldTitle || ogTitle || twTitle || undefined,
     image_url:
       normalizeHttpUrl(ldImage) ||
       normalizeHttpUrl(domBgImage) ||
+      normalizeHttpUrl(plpHints?.image_url) ||
       normalizeHttpUrl(ogImage) ||
       normalizeHttpUrl(twImage) ||
       normalizeHttpUrl(cdnImage),
     description: descPdp || undefined,
-    rating: ldRating ?? domRating,
-    price: ldPrice ?? domPrice ?? jsonPrice,
-    original_price: domMrp ?? jsonMrp,
+    rating: ldRating ?? domRating ?? plpHints?.rating,
+    price: ldPrice ?? plpHints?.price ?? domPrice ?? jsonPrice,
+    original_price: plpHints?.original_price ?? domMrp ?? jsonMrp,
   };
 }
 
