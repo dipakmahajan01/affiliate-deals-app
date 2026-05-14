@@ -27,7 +27,7 @@ app.use('/v1/auth', authRoutes);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 connectDB().then(async () => {
-  app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+  app.listen(PORT);
   startPoller().catch((err) => {
     console.error('[Poller] failed to start — API will continue without it:', err);
   });

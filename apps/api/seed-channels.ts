@@ -93,7 +93,6 @@ async function seed() {
   }
 
   await mongoose.connect(uri);
-  console.log('Connected to MongoDB');
 
   let inserted = 0, updated = 0, skipped = 0;
 
@@ -108,7 +107,6 @@ async function seed() {
     else updated++;
   }
 
-  console.log(`\nDone — inserted: ${inserted} | already existed (skipped): ${skipped}\n`);
   await mongoose.disconnect();
   process.exit(0);
 }

@@ -819,7 +819,6 @@ function isAmazonCaptcha(html: string): boolean {
 export async function scrapeProduct(url: string, source: DealSource): Promise<ScrapedProduct | null> {
   let scrapingUrl = url;
   if (source === 'Flipkart') scrapingUrl = normalizeFlipkartUrl(url);
-  console.log(`[Scraper] Scraping ${source} page: ${scrapingUrl.slice(0, 80)}...`);
 
   let html: string | null = null;
   if (source === 'Flipkart') html = await fetchFlipkart(scrapingUrl);
@@ -827,19 +826,14 @@ export async function scrapeProduct(url: string, source: DealSource): Promise<Sc
   else html = await fetchWithRetry(scrapingUrl);
 
   if (!html) {
-    console.log(`[Scraper] Failed to fetch page`);
     return null;
   }
 
   if (source === 'Amazon' && isAmazonCaptcha(html)) {
-    console.log(`[Scraper] Amazon CAPTCHA detected — skipping scrape`);
     return null;
   }
 
   const result =
     source === 'Amazon' ? scrapeAmazon(html) : source === 'Flipkart' ? scrapeFlipkart(html) : scrapeMyntra(html);
-  console.log(
-    `[Scraper] title="${result.title?.slice(0, 50)}" image=${!!result.image_url} rating=${result.rating} price=${result.price} mrp=${result.original_price} bankOffers=${result.bank_offers?.length ?? 0}`
-  );
   return result;
 }

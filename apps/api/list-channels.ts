@@ -20,7 +20,6 @@ const client = new TelegramClient(new StringSession(SESSION), API_ID, API_HASH, 
 
   const dialogs = await client.getDialogs({ limit: 200 });
 
-  console.log('\n=== Your Telegram Channels ===\n');
   for (const dialog of dialogs) {
     const entity = dialog.entity as {
       className?: string;
@@ -37,10 +36,7 @@ const client = new TelegramClient(new StringSession(SESSION), API_ID, API_HASH, 
       const channelId = `-100${numericId}`;
       const username = entity.username ? `@${entity.username}` : '(private — no username)';
 
-      console.log(`Title    : ${entity.title}`);
-      console.log(`Username : ${username}`);
-      console.log(`ID       : ${channelId}`);
-      console.log('---');
+      process.stdout.write(`Title    : ${entity.title}\nUsername : ${username}\nID       : ${channelId}\n---\n`);
     }
   }
 

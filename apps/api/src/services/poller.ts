@@ -28,7 +28,6 @@ async function buildEntityCache(tg: TelegramClient): Promise<void> {
     entityCache.set(numericForm, entity);
     if (entity.username) entityCache.set(entity.username, entity);
   }
-  console.log(`[Telegram] Entity cache built: ${entityCache.size} entries`);
 }
 
 async function resolveEntity(channelUsername: string): Promise<object> {
@@ -42,7 +41,6 @@ async function resolveEntity(channelUsername: string): Promise<object> {
 
 async function getTelegramClient(): Promise<TelegramClient> {
   if (client) {
-    console.log('[Telegram] Reusing existing client connection');
     return client;
   }
 
@@ -50,13 +48,11 @@ async function getTelegramClient(): Promise<TelegramClient> {
   const apiHash = process.env.TELEGRAM_API_HASH ?? '';
   const session = new StringSession(process.env.TELEGRAM_SESSION ?? '');
 
-  console.log(`[Telegram] Connecting with API_ID=${apiId}...`);
   client = new TelegramClient(session, apiId, apiHash, {
     connectionRetries: 3,
   });
 
   await client.connect();
-  console.log('[Telegram] Connected successfully');
   return client;
 }
 
@@ -64,7 +60,6 @@ type RawMessage = { id: number; text?: string; date?: number };
 
 async function  processMessage(channelUsername: string, msg: RawMessage): Promise<'saved' | 'duplicate' | 'skipped'> {
   if (!msg.text) return 'skipped';
-  console.log("msg.text", msg.text);
 
   // Persist raw message before any processing
   await Message.updateOne(
@@ -92,7 +87,6 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
   if (!source) return 'skipped';
 
   const affiliateUrl = await buildAffiliateUrl(resolvedUrl, parsed.url);
-  console.log("affiliateUrl", affiliateUrl);
   if (!affiliateUrl) return 'skipped';
 
   const category = categorize(parsed.product_title);
@@ -115,9 +109,6 @@ async function processScrapedProduct(
   // — this is the most reliable cross-channel duplicate check.
   const affiliateUrlDup = await Product.findOne({ affiliate_url: affiliateUrl }).select('_id product_title price').lean();
   if (affiliateUrlDup) {
-    console.log(`[Poller] ⚠️  DUPLICATE product (affiliate_url) skipped from @${channelUsername} msg#${msg.id}`);
-    console.log(`         Incoming : "${parsed.product_title}" @ ₹${parsed.price}`);
-    console.log(`         Existing : "${affiliateUrlDup.product_title}" @ ₹${affiliateUrlDup.price} (id: ${affiliateUrlDup._id})`);
     return 'duplicate';
   }
 
@@ -139,9 +130,6 @@ async function processScrapedProduct(
         price: finalPrice,
       }).select('_id product_title price').lean();
       if (titlePriceDup) {
-        console.log(`[Poller] ⚠️  DUPLICATE product (title+price) skipped from @${channelUsername} msg#${msg.id}`);
-        console.log(`         Incoming : "${parsed.product_title}" @ ₹${finalPrice}`);
-        console.log(`         Existing : "${titlePriceDup.product_title}" @ ₹${titlePriceDup.price} (id: ${titlePriceDup._id})`);
         return 'duplicate';
       }
     }
@@ -179,16 +167,12 @@ async function processScrapedProduct(
       { upsert: true }
     );
     if (result.upsertedCount > 0) {
-      const priceSrc = scraped?.price != null ? 'scraped' : 'parsed';
-      console.log(`[Poller] ✅ SAVED product from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${finalPrice} (${priceSrc})`);
       Message.updateOne({ channel_id: channelUsername, message_id: msg.id }, { $set: { processed: true } }).catch(() => {});
       return 'saved';
     }
-    console.log(`[Poller] ⚠️  DUPLICATE product (channel+msg index) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${finalPrice}`);
     return 'duplicate';
   } catch (err: unknown) {
     if ((err as { code?: number }).code === 11000) {
-      console.log(`[Poller] ⚠️  DUPLICATE product (unique index conflict) skipped from @${channelUsername} msg#${msg.id}: "${parsed.product_title}" @ ₹${parsed.price}`);
       return 'duplicate';
     }
     console.error(`[Poller] ❌ Product DB error:`, err);
@@ -197,13 +181,10 @@ async function processScrapedProduct(
 }
 
 async function pollChannel(channelUsername: string, limit = 100): Promise<void> {
-  console.log(`\n[Poller] ▶ Starting poll for ${channelUsername} (limit=${limit})`);
   const tg = await getTelegramClient();
 
   const entity = await resolveEntity(channelUsername) as Parameters<typeof tg.getMessages>[0];
   const messages = await tg.getMessages(entity, { limit });
-  console.log("messages", messages);
-  console.log(`[Poller] Got ${messages.length} messages`);
 
   let saved = 0, skipped = 0, duplicates = 0;
 
@@ -220,7 +201,6 @@ async function pollChannel(channelUsername: string, limit = 100): Promise<void> 
   }
 
   await Channel.updateOne({ channel_username: channelUsername }, { last_polled_at: new Date() });
-  console.log(`[Poller] ✔ Done @${channelUsername} — saved: ${saved} | duplicates: ${duplicates} | skipped: ${skipped}\n`);
 }
 
 async function startRealtime(): Promise<void> {
@@ -229,12 +209,10 @@ async function startRealtime(): Promise<void> {
   const channels = await Channel.find({ is_active: true });
 
   if (channels.length === 0) {
-    console.log('[Realtime] No active channels — listener not started');
     return;
   }
 
   const usernames = channels.map((c) => c.channel_username);
-  console.log(`[Realtime] Listening for new messages in: ${usernames.map((u) => '@' + u).join(', ')}`);
 
   tg.addEventHandler(async (event: NewMessageEvent) => {
     const msg = event.message;
@@ -268,18 +246,11 @@ async function startRealtime(): Promise<void> {
 
     if (!channelUsername) return;
 
-    console.log(`[Realtime] New message in @${channelUsername} — msg#${msg.id}`);
     const outcome = await processMessage(channelUsername, msg);
-    console.log("outcome", outcome);
     if (outcome === 'saved') {
-      console.log(`[Realtime] ✅ Deal saved from @${channelUsername} msg#${msg.id}`);
       await Channel.updateOne({ channel_username: channelUsername }, { last_polled_at: new Date() });
-    } else {
-      console.log(`[Realtime] ⏭  msg#${msg.id} — ${outcome}`);
     }
   }, new NewMessage({}));
-
-  console.log('[Realtime] Event handler registered');
 }
 
 export async function startPoller(): Promise<void> {
@@ -294,10 +265,7 @@ export async function startPoller(): Promise<void> {
 
   // Cron as catch-up fallback (every 10 min)
   cron.schedule('*/10 * * * *', async () => {
-    console.log(`\n[Poller] ⏰ Catch-up cron at ${new Date().toISOString()}`);
     const channels = await Channel.find({ is_active: true });
-    console.log(`[Poller] Polling ${channels.length} channels`);
-    console.log("channels", channels);
     for (const ch of channels) {
       try {
         await pollChannel(ch.channel_username);
@@ -305,10 +273,7 @@ export async function startPoller(): Promise<void> {
         console.error(`[Poller] ❌ Error polling @${ch.channel_username}:`, err);
       }
     }
-    console.log('[Poller] ✅ Catch-up done\n');
   });
-
-  console.log('[Poller] Real-time listener active + catch-up cron scheduled (every 10 min)');
 }
 
 export async function getTelegramChannels(): Promise<{ username: string; title: string }[]> {

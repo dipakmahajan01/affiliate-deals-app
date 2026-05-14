@@ -33,9 +33,7 @@ if (!API_ID || !API_HASH) {
   });
 
   const session = client.session.save() as unknown as string;
-  console.log('\n✅ Your TELEGRAM_SESSION string:\n');
-  console.log(session);
-  console.log('\nPaste this into apps/api/.env as:\nTELEGRAM_SESSION=' + session);
+  process.stdout.write(`\n✅ Your TELEGRAM_SESSION string:\n\n${session}\n\nPaste this into apps/api/.env as:\nTELEGRAM_SESSION=${session}\n`);
 
   rl.close();
   await client.disconnect();

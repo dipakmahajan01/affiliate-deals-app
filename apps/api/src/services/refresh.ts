@@ -50,9 +50,6 @@ export async function refreshActiveDeals(batchSize = BATCH_SIZE): Promise<{ refr
     if (shouldDeactivate) {
       update.is_active = false;
       deactivated += 1;
-      console.log(
-        `[Refresh] 🔻 Deactivated "${d.product_title}" — live ₹${livePrice} vs posted ₹${d.price} (+${Math.round(((livePrice! - d.price) / d.price) * 100)}%)`
-      );
     } else {
       refreshed += 1;
     }
@@ -60,19 +57,16 @@ export async function refreshActiveDeals(batchSize = BATCH_SIZE): Promise<{ refr
     await Product.updateOne({ _id: d._id }, { $set: update });
   }
 
-  console.log(`[Refresh] Done. refreshed=${refreshed} deactivated=${deactivated} failed=${failed}`);
   return { refreshed, deactivated, failed };
 }
 
 export function startRefreshCron(): void {
   // Every 30 min: refresh a batch of the oldest-scraped active deals.
   cron.schedule('*/30 * * * *', async () => {
-    console.log(`\n[Refresh] ⏰ Refresh cron at ${new Date().toISOString()}`);
     try {
       await refreshActiveDeals();
     } catch (err) {
       console.error('[Refresh] ❌ Error in refresh cron:', err);
     }
   });
-  console.log('[Refresh] Refresh cron scheduled (every 30 min)');
 }
