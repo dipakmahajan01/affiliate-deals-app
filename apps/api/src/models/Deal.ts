@@ -61,5 +61,9 @@ DealSchema.index({ normalized_title: 1, price: 1 }, { unique: true, sparse: true
 DealSchema.index({ category: 1 });
 DealSchema.index({ product_title: 'text' });
 DealSchema.index({ clicks: -1, posted_at: -1 });
+// Main public feed: filter is_active and sort by posted_at desc.
+DealSchema.index({ is_active: 1, posted_at: -1 });
+// Category endpoint: filter is_active+category and sort by posted_at desc.
+DealSchema.index({ is_active: 1, category: 1, posted_at: -1 });
 
 export const Deal = model<DealDoc>('Deal', DealSchema);

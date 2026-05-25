@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { Deal } from '../models/Deal';
 import { Product } from '../models/Product';
+import { cache } from '../services/cache';
 
 const router = Router();
 
@@ -8,6 +9,10 @@ type FeedItem = Record<string, unknown> & { posted_at: Date; clicks: number };
 
 // Public listings only show items with a valid product image — items missing image_url look broken on the card.
 const HAS_IMAGE = { image_url: { $exists: true, $nin: [null, ''] } } as const;
+
+// Listing TTL — short enough that staleness is invisible (poller refreshes every 10 min),
+// long enough to absorb homepage traffic.
+const LIST_TTL = 60;
 
 function tag(items: FeedItem[], type: 'deal' | 'product') {
   return items.map((i) => ({ ...i, item_type: type }));
@@ -17,41 +22,49 @@ function tag(items: FeedItem[], type: 'deal' | 'product') {
 router.get('/', async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
-  const fetch = page * limit;
 
-  const base = { is_active: true, ...HAS_IMAGE };
-  const [deals, products, dealCount, productCount] = await Promise.all([
-    Deal.find(base).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
-    Product.find(base).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
-    Deal.countDocuments(base),
-    Product.countDocuments(base),
-  ]);
+  const payload = await cache.withCache(`feed:list:p=${page}:l=${limit}`, LIST_TTL, async () => {
+    const fetch = page * limit;
+    const base = { is_active: true, ...HAS_IMAGE };
+    const [deals, products, dealCount, productCount] = await Promise.all([
+      Deal.find(base).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
+      Product.find(base).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
+      Deal.countDocuments(base),
+      Product.countDocuments(base),
+    ]);
 
-  const merged = [...tag(deals, 'deal'), ...tag(products, 'product')]
-    .sort((a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime());
+    const merged = [...tag(deals, 'deal'), ...tag(products, 'product')]
+      .sort((a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime());
 
-  const skip = (page - 1) * limit;
-  const data = merged.slice(skip, skip + limit);
-  const total = dealCount + productCount;
+    const skip = (page - 1) * limit;
+    const data = merged.slice(skip, skip + limit);
+    const total = dealCount + productCount;
 
-  res.json({ data, page, limit, total, hasMore: skip + data.length < total });
+    return { data, page, limit, total, hasMore: skip + data.length < total };
+  });
+
+  res.json(payload);
 });
 
 // GET /v1/feed/trending
 router.get('/trending', async (_req: Request, res: Response) => {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const filter = { is_active: true, posted_at: { $gte: since }, ...HAS_IMAGE };
+  const payload = await cache.withCache('feed:trending', LIST_TTL, async () => {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const filter = { is_active: true, posted_at: { $gte: since }, ...HAS_IMAGE };
 
-  const [deals, products] = await Promise.all([
-    Deal.find(filter).sort({ clicks: -1 }).limit(20).lean() as Promise<FeedItem[]>,
-    Product.find(filter).sort({ clicks: -1 }).limit(20).lean() as Promise<FeedItem[]>,
-  ]);
+    const [deals, products] = await Promise.all([
+      Deal.find(filter).sort({ clicks: -1 }).limit(20).lean() as Promise<FeedItem[]>,
+      Product.find(filter).sort({ clicks: -1 }).limit(20).lean() as Promise<FeedItem[]>,
+    ]);
 
-  const data = [...tag(deals, 'deal'), ...tag(products, 'product')]
-    .sort((a, b) => b.clicks - a.clicks)
-    .slice(0, 20);
+    const data = [...tag(deals, 'deal'), ...tag(products, 'product')]
+      .sort((a, b) => b.clicks - a.clicks)
+      .slice(0, 20);
 
-  res.json({ data });
+    return { data };
+  });
+
+  res.json(payload);
 });
 
 // GET /v1/feed/suggest?q=  — autocomplete suggestions
@@ -113,25 +126,29 @@ router.get('/search', async (req: Request, res: Response) => {
 router.get('/category/:cat', async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
-  const fetch = page * limit;
   const cat = req.params.cat;
 
-  const catFilter = { is_active: true, category: cat, ...HAS_IMAGE };
-  const [deals, products, dealCount, productCount] = await Promise.all([
-    Deal.find(catFilter).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
-    Product.find(catFilter).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
-    Deal.countDocuments(catFilter),
-    Product.countDocuments(catFilter),
-  ]);
+  const payload = await cache.withCache(`feed:cat:${cat}:p=${page}:l=${limit}`, LIST_TTL, async () => {
+    const fetch = page * limit;
+    const catFilter = { is_active: true, category: cat, ...HAS_IMAGE };
+    const [deals, products, dealCount, productCount] = await Promise.all([
+      Deal.find(catFilter).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
+      Product.find(catFilter).sort({ posted_at: -1 }).limit(fetch).lean() as Promise<FeedItem[]>,
+      Deal.countDocuments(catFilter),
+      Product.countDocuments(catFilter),
+    ]);
 
-  const merged = [...tag(deals, 'deal'), ...tag(products, 'product')]
-    .sort((a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime());
+    const merged = [...tag(deals, 'deal'), ...tag(products, 'product')]
+      .sort((a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime());
 
-  const skip = (page - 1) * limit;
-  const data = merged.slice(skip, skip + limit);
-  const total = dealCount + productCount;
+    const skip = (page - 1) * limit;
+    const data = merged.slice(skip, skip + limit);
+    const total = dealCount + productCount;
 
-  res.json({ data, page, limit, total, hasMore: skip + data.length < total });
+    return { data, page, limit, total, hasMore: skip + data.length < total };
+  });
+
+  res.json(payload);
 });
 
 export default router;

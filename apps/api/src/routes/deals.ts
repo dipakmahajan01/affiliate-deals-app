@@ -1,35 +1,44 @@
 import { Router, Request, Response } from 'express';
 import { Deal } from '../models/Deal';
 import { Click } from '../models/Click';
+import { cache } from '../services/cache';
 
 const router = Router();
 
 // Public listings only show items with a valid product image — items missing image_url look broken on the card.
 const HAS_IMAGE = { image_url: { $exists: true, $nin: [null, ''] } } as const;
 
+const LIST_TTL = 60;
+
 // GET /v1/deals — paginated list
 router.get('/', async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
-  const skip = (page - 1) * limit;
 
-  const filter = { is_active: true, ...HAS_IMAGE };
-  const [data, total] = await Promise.all([
-    Deal.find(filter).sort({ posted_at: -1 }).skip(skip).limit(limit).lean(),
-    Deal.countDocuments(filter),
-  ]);
+  const payload = await cache.withCache(`deals:list:p=${page}:l=${limit}`, LIST_TTL, async () => {
+    const skip = (page - 1) * limit;
+    const filter = { is_active: true, ...HAS_IMAGE };
+    const [data, total] = await Promise.all([
+      Deal.find(filter).sort({ posted_at: -1 }).skip(skip).limit(limit).lean(),
+      Deal.countDocuments(filter),
+    ]);
+    return { data, page, limit, total, hasMore: skip + data.length < total };
+  });
 
-  res.json({ data, page, limit, total, hasMore: skip + data.length < total });
+  res.json(payload);
 });
 
 // GET /v1/deals/trending — top clicked in last 24h
 router.get('/trending', async (_req: Request, res: Response) => {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const data = await Deal.find({ is_active: true, posted_at: { $gte: since }, ...HAS_IMAGE })
-    .sort({ clicks: -1 })
-    .limit(20)
-    .lean();
-  res.json({ data });
+  const payload = await cache.withCache('deals:trending', LIST_TTL, async () => {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const data = await Deal.find({ is_active: true, posted_at: { $gte: since }, ...HAS_IMAGE })
+      .sort({ clicks: -1 })
+      .limit(20)
+      .lean();
+    return { data };
+  });
+  res.json(payload);
 });
 
 // GET /v1/deals/search?q=
@@ -53,15 +62,19 @@ router.get('/search', async (req: Request, res: Response) => {
 router.get('/category/:cat', async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
-  const skip = (page - 1) * limit;
+  const cat = req.params.cat;
 
-  const filter = { is_active: true, category: req.params.cat, ...HAS_IMAGE };
-  const [data, total] = await Promise.all([
-    Deal.find(filter).sort({ posted_at: -1 }).skip(skip).limit(limit).lean(),
-    Deal.countDocuments(filter),
-  ]);
+  const payload = await cache.withCache(`deals:cat:${cat}:p=${page}:l=${limit}`, LIST_TTL, async () => {
+    const skip = (page - 1) * limit;
+    const filter = { is_active: true, category: cat, ...HAS_IMAGE };
+    const [data, total] = await Promise.all([
+      Deal.find(filter).sort({ posted_at: -1 }).skip(skip).limit(limit).lean(),
+      Deal.countDocuments(filter),
+    ]);
+    return { data, page, limit, total, hasMore: skip + data.length < total };
+  });
 
-  res.json({ data, page, limit, total, hasMore: skip + data.length < total });
+  res.json(payload);
 });
 
 // GET /v1/deals/:id
