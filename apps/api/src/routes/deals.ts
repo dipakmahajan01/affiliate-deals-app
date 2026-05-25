@@ -4,15 +4,19 @@ import { Click } from '../models/Click';
 
 const router = Router();
 
+// Public listings only show items with a valid product image — items missing image_url look broken on the card.
+const HAS_IMAGE = { image_url: { $exists: true, $nin: [null, ''] } } as const;
+
 // GET /v1/deals — paginated list
 router.get('/', async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
   const skip = (page - 1) * limit;
 
+  const filter = { is_active: true, ...HAS_IMAGE };
   const [data, total] = await Promise.all([
-    Deal.find({ is_active: true }).sort({ posted_at: -1 }).skip(skip).limit(limit).lean(),
-    Deal.countDocuments({ is_active: true }),
+    Deal.find(filter).sort({ posted_at: -1 }).skip(skip).limit(limit).lean(),
+    Deal.countDocuments(filter),
   ]);
 
   res.json({ data, page, limit, total, hasMore: skip + data.length < total });
@@ -21,7 +25,7 @@ router.get('/', async (req: Request, res: Response) => {
 // GET /v1/deals/trending — top clicked in last 24h
 router.get('/trending', async (_req: Request, res: Response) => {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const data = await Deal.find({ is_active: true, posted_at: { $gte: since } })
+  const data = await Deal.find({ is_active: true, posted_at: { $gte: since }, ...HAS_IMAGE })
     .sort({ clicks: -1 })
     .limit(20)
     .lean();
@@ -36,6 +40,7 @@ router.get('/search', async (req: Request, res: Response) => {
   const data = await Deal.find({
     is_active: true,
     $text: { $search: q },
+    ...HAS_IMAGE,
   })
     .sort({ score: { $meta: 'textScore' } })
     .limit(30)
@@ -50,9 +55,10 @@ router.get('/category/:cat', async (req: Request, res: Response) => {
   const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
   const skip = (page - 1) * limit;
 
+  const filter = { is_active: true, category: req.params.cat, ...HAS_IMAGE };
   const [data, total] = await Promise.all([
-    Deal.find({ is_active: true, category: req.params.cat }).sort({ posted_at: -1 }).skip(skip).limit(limit).lean(),
-    Deal.countDocuments({ is_active: true, category: req.params.cat }),
+    Deal.find(filter).sort({ posted_at: -1 }).skip(skip).limit(limit).lean(),
+    Deal.countDocuments(filter),
   ]);
 
   res.json({ data, page, limit, total, hasMore: skip + data.length < total });

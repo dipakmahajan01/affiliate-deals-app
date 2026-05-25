@@ -4,6 +4,9 @@ import { Click } from '../models/Click';
 
 const router = Router();
 
+// Public listings only show items with a valid product image — items missing image_url look broken on the card.
+const HAS_IMAGE = { image_url: { $exists: true, $nin: [null, ''] } } as const;
+
 // GET /v1/products
 router.get('/', async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -13,7 +16,7 @@ router.get('/', async (req: Request, res: Response) => {
   // Deduplicate by affiliate_url — same ASIN/product always produces the same affiliate_url,
   // so this catches duplicates across all channels including old records without resolved_url.
   const [result] = await Product.aggregate([
-    { $match: { is_active: true } },
+    { $match: { is_active: true, ...HAS_IMAGE } },
     { $sort: { createdAt: -1 } },
     {
       $group: {
@@ -40,7 +43,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/trending', async (_req: Request, res: Response) => {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const data = await Product.aggregate([
-    { $match: { is_active: true, posted_at: { $gte: since } } },
+    { $match: { is_active: true, posted_at: { $gte: since }, ...HAS_IMAGE } },
     { $sort: { clicks: -1 } },
     {
       $group: {
@@ -61,7 +64,7 @@ router.get('/search', async (req: Request, res: Response) => {
   if (!q) return res.json({ data: [] });
 
   const data = await Product.aggregate([
-    { $match: { is_active: true, $text: { $search: q } } },
+    { $match: { is_active: true, $text: { $search: q }, ...HAS_IMAGE } },
     { $sort: { score: { $meta: 'textScore' } } },
     {
       $group: {
@@ -84,7 +87,7 @@ router.get('/category/:cat', async (req: Request, res: Response) => {
   const skip = (page - 1) * limit;
 
   const [result] = await Product.aggregate([
-    { $match: { is_active: true, category: req.params.cat } },
+    { $match: { is_active: true, category: req.params.cat, ...HAS_IMAGE } },
     { $sort: { posted_at: -1 } },
     {
       $group: {

@@ -13,7 +13,9 @@
     "lint": "eslint src",
     "clean": "rm -rf dist",
     "backfill:images": "tsx src/scripts/backfill-images.ts",
-    "refresh:myntra": "tsx src/scripts/refresh-myntra-images.ts"
+    "backfill:amazon": "tsx src/scripts/backfill-amazon-images.ts",
+    "refresh:myntra": "tsx src/scripts/refresh-myntra-images.ts",
+    "telegram:login": "tsx src/scripts/telegram-login.ts"
   },
   "dependencies": {
     "@deals/types": "workspace:*",

@@ -133,8 +133,15 @@ async function fetchMyntra(url: string): Promise<string | null> {
 
 function pickLargestDynamicImage(dataDynamic: string | undefined): string | undefined {
   if (!dataDynamic) return undefined;
+  // Amazon often stores JSON with HTML entities: `{&quot;https://...&quot;:[679,679]}` — JSON.parse fails until decoded.
+  const decoded = dataDynamic
+    .trim()
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*34;/g, '"')
+    .replace(/&#x0*22;/gi, '"')
+    .replace(/&amp;/g, '&');
   try {
-    const map = JSON.parse(dataDynamic) as Record<string, [number, number]>;
+    const map = JSON.parse(decoded) as Record<string, [number, number]>;
     const urls = Object.keys(map).filter((u) => u.startsWith('http'));
     if (urls.length === 0) return undefined;
     return urls.reduce((best, u) => {
@@ -223,23 +230,109 @@ function scrapeAmazonBankOffers($: CheerioAPI): string[] {
   return lines.slice(0, 8);
 }
 
+const AMAZON_IMAGE_JUNK =
+  /sprite|nav-?sprite|logo|badge|1x1|pixel|transparent|placeholder|grey|gray|loading|facebook|twimg|\/images\/G\/|Prime_Logo|SuperSaver|secure-image|Buy2|clickam|customer\-reviews|Avatar|white\-bg|PKdp|PKmb|PKpass|PKpay/i;
+
+function isAmazonJunkImageUrl(url: string): boolean {
+  return AMAZON_IMAGE_JUNK.test(url);
+}
+
+/** Prefer larger Amazon CDN renditions (_SL1500_, etc.). */
+function amazonImageUrlScore(url: string): number {
+  if (!/^https?:\/\//i.test(url) || url.startsWith('data:')) return -1;
+  if (isAmazonJunkImageUrl(url)) return -1;
+  let s = 80;
+  const re = /_(?:AC_)?(?:SL|UL|SX|SY|UX)(\d+)_/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(url)) !== null) {
+    s += Math.min(parseInt(m[1], 10), 3000);
+  }
+  return s;
+}
+
+function considerAmazonImageCandidate(
+  raw: string | undefined,
+  bucket: { url: string; score: number }[]
+): void {
+  if (!raw) return;
+  const decoded = raw.trim().replace(/&amp;/g, '&');
+  const u = normalizeHttpUrl(decoded.split(/\s+/)[0]);
+  if (!u || !/media-amazon|ssl-images-amazon/i.test(u)) return;
+  if (u.startsWith('data:')) return;
+  const score = amazonImageUrlScore(u);
+  if (score < 0) return;
+  const clean = u.split('?')[0];
+  bucket.push({ url: clean, score });
+}
+
+function pickBestAmazonImageFromHtmlStrings(html: string, bucket: { url: string; score: number }[]): void {
+  const patterns: RegExp[] = [
+    /"hiRes"\s*:\s*"([^"]+)"/g,
+    /"large"\s*:\s*"(https:\/\/m\.media-amazon\.com[^"]+)"/gi,
+    /"mainUrl"\s*:\s*"([^"]*media-amazon[^"]*)"/gi,
+    /data-old-hires\s*=\s*"([^"]+)"/gi,
+  ];
+  for (const re of patterns) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) considerAmazonImageCandidate(m[1], bucket);
+  }
+
+  const imgRe =
+    /https:\/\/(?:m\.media-amazon|images-na\.ssl-images-amazon|images-eu\.ssl-images-amazon)\.com\/images\/I\/[A-Za-z0-9._%+~-]+\.(?:jpg|jpeg|png|webp)/gi;
+  let im: RegExpExecArray | null;
+  while ((im = imgRe.exec(html)) !== null) considerAmazonImageCandidate(im[0], bucket);
+}
+
+function pickBestAmazonProductImage($: CheerioAPI, html: string): string | undefined {
+  const bucket: { url: string; score: number }[] = [];
+  const seen = new WeakSet<object>();
+
+  const visitImageNode = (el: object) => {
+    if (seen.has(el)) return;
+    seen.add(el);
+    const $el = $(el as never);
+    considerAmazonImageCandidate($el.attr('data-old-hires'), bucket);
+    considerAmazonImageCandidate(pickLargestDynamicImage($el.attr('data-a-dynamic-image')), bucket);
+    considerAmazonImageCandidate($el.attr('src'), bucket);
+  };
+
+  // `#imgTagWrapperId` (classic PDP) + `.imgTagWrapper` (media blocks / alternate layouts) + common hero selectors
+  $(
+    '#imgTagWrapperId img, .imgTagWrapper img, #landingImage, img.media-block-image-tag, img.a-dynamic-image[data-old-hires], img[data-old-hires]'
+  ).each((_, el) => visitImageNode(el));
+
+  $('[data-a-dynamic-image]').each((_, el) => visitImageNode(el));
+
+  considerAmazonImageCandidate($('meta[property="og:image"]').attr('content'), bucket);
+  considerAmazonImageCandidate($('meta[name="twitter:image"]').attr('content'), bucket);
+  considerAmazonImageCandidate($('meta[name="twitter:image:src"]').attr('content'), bucket);
+
+  const ldHints: Partial<ScrapedProduct>[] = [];
+  $('script[type="application/ld+json"]').each((_, el) => {
+    const raw = $(el).html();
+    if (!raw?.trim()) return;
+    try {
+      collectJsonLdProductHints(JSON.parse(raw.trim()), ldHints);
+    } catch {
+      /* invalid JSON */
+    }
+  });
+  for (const h of ldHints) considerAmazonImageCandidate(h.image_url, bucket);
+
+  pickBestAmazonImageFromHtmlStrings(html, bucket);
+
+  if (!bucket.length) return undefined;
+  bucket.sort((a, b) => b.score - a.score);
+  return normalizeHttpUrl(bucket[0].url);
+}
+
 function scrapeAmazon(html: string): ScrapedProduct {
   const $ = cheerio.load(html);
 
   const title = $('#productTitle').text().trim() || undefined;
 
-  const wrapper = $('#imgTagWrapperId');
-  const imgEl = wrapper.find('img').first();
-  const rawImageUrl =
-    (imgEl.attr('data-old-hires') as string | undefined) ||
-    (wrapper.find('[data-old-hires]').first().attr('data-old-hires') as string | undefined) ||
-    pickLargestDynamicImage(imgEl.attr('data-a-dynamic-image')) ||
-    ($('#landingImage').attr('data-old-hires') as string | undefined) ||
-    ($('#landingImage').attr('src') as string | undefined) ||
-    (imgEl.attr('src') as string | undefined) ||
-    undefined;
-  // Normalize: fix protocol-relative URLs (//m.media-amazon.com/...) and reject non-HTTP values
-  const image_url = normalizeHttpUrl(rawImageUrl);
+  const image_url = pickBestAmazonProductImage($, html);
 
   const description = $('#productDescription p').map((_, el) => $(el).text().trim()).get().filter(Boolean).join(' ') || undefined;
 
