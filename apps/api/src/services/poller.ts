@@ -141,7 +141,6 @@ async function processScrapedProduct(
         $setOnInsert: {
           channel_id: channelUsername,
           message_id: msg.id,
-          price: finalPrice,
           normalized_title: normTitle,
           coupon_text: parsed.coupon_text ?? undefined,
           original_url: parsed.url ?? resolvedUrl,
@@ -155,7 +154,7 @@ async function processScrapedProduct(
           product_title: (scraped?.title?.trim() || parsed.product_title) as string,
           scrape_status: scrapeStatus,
           scraped_at: new Date(),
-          ...(scraped?.price != null ? { price: scraped.price } : {}),
+          price: finalPrice,
           ...(finalOriginalPrice != null ? { original_price: finalOriginalPrice } : {}),
           ...(scraped?.image_url ? { image_url: scraped.image_url } : {}),
           ...(scraped?.description ? { description: scraped.description } : {}),

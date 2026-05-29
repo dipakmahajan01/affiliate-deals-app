@@ -54,7 +54,14 @@ export async function refreshActiveDeals(batchSize = BATCH_SIZE): Promise<{ refr
       refreshed += 1;
     }
 
-    await Product.updateOne({ _id: d._id }, { $set: update });
+    try {
+      await Product.updateOne({ _id: d._id }, { $set: update });
+    } catch (err) {
+      console.error(`[Refresh] skip ${d._id}:`, err);
+      failed += 1;
+      if (!shouldDeactivate) refreshed -= 1;
+      else deactivated -= 1;
+    }
   }
 
   return { refreshed, deactivated, failed };

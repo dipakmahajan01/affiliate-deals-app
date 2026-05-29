@@ -64,9 +64,10 @@ ProductSchema.index({ channel_id: 1, message_id: 1 }, { unique: true });
 ProductSchema.index({ resolved_url: 1 }, { unique: true, sparse: true });
 // Fast lookup for affiliate_url deduplication across channels
 ProductSchema.index({ affiliate_url: 1 });
-// Unique dedup index: normalized title + price prevents same product from being inserted twice
-// sparse:true so existing docs without normalized_title are excluded (no migration needed)
-ProductSchema.index({ normalized_title: 1, price: 1 }, { unique: true, sparse: true });
+// Dedup lookup index: normalized title + price. NOT unique — price mutates over time during refresh,
+// so a unique constraint would throw E11000 whenever two products converge on the same live price.
+// Dedup is enforced at write time by code (Product.findOne) in poller.ts.
+ProductSchema.index({ normalized_title: 1, price: 1 });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ product_title: 'text', description: 'text' });
 ProductSchema.index({ clicks: -1, posted_at: -1 });
