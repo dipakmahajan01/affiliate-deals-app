@@ -5,8 +5,11 @@ import Category from './pages/Category';
 import DealDetail from './pages/DealDetail';
 import Search from './pages/Search';
 import Trending from './pages/Trending';
+import PriceDrops from './pages/PriceDrops';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import Assistant from './pages/Assistant';
+import AssistantWidget from './components/assistant/AssistantWidget';
 
 export default function App() {
   return (
@@ -19,10 +22,13 @@ export default function App() {
           <Route path="/deal/:id" element={<DealDetail />} />
           <Route path="/search" element={<Search />} />
           <Route path="/trending" element={<Trending />} />
+          <Route path="/price-drops" element={<PriceDrops />} />
+          <Route path="/assistant" element={<Assistant />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
         </Routes>
       </main>
+      <AssistantWidget />
     </div>
   );
 }

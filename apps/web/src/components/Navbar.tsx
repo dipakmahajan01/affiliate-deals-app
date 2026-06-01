@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import type { Deal } from '@deals/types';
 import { useAuthStore } from '../store/authStore';
+import { useDealClick } from '../hooks/useDealClick';
 
 const CATEGORIES = [
   { name: 'Electronics', icon: '💻' },
@@ -15,36 +17,46 @@ const CATEGORIES = [
 
 export default function Navbar() {
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [results, setResults] = useState<Deal[]>([]);
+  const [showResults, setShowResults] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const handleDealClick = useDealClick();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  // Real-time search: fetch live product results as the user types (debounced).
   useEffect(() => {
     if (query.trim().length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
+      setResults([]);
+      setShowResults(false);
       return;
     }
+    setLoading(true);
+    const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/v1/feed/suggest?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch(`/v1/feed/live?q=${encodeURIComponent(query.trim())}`, { signal: ctrl.signal });
         const json = await res.json();
-        const s: string[] = json.suggestions ?? [];
-        setSuggestions(s);
-        setShowSuggestions(s.length > 0);
+        const items: Deal[] = json.items ?? [];
+        setResults(items);
+        setShowResults(true);
       } catch {
-        setSuggestions([]);
+        /* aborted or failed — leave previous results */
+      } finally {
+        setLoading(false);
       }
-    }, 300);
-    return () => clearTimeout(timer);
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
   }, [query]);
 
   useEffect(() => {
     function handleOutside(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
+        setShowResults(false);
       }
     }
     document.addEventListener('mousedown', handleOutside);
@@ -54,15 +66,14 @@ export default function Navbar() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (query.trim()) {
-      setShowSuggestions(false);
+      setShowResults(false);
       navigate(`/search?q=${encodeURIComponent(query.trim())}`);
     }
   }
 
-  function pickSuggestion(title: string) {
-    setQuery(title);
-    setShowSuggestions(false);
-    navigate(`/search?q=${encodeURIComponent(title)}`);
+  function pickItem(item: Deal) {
+    setShowResults(false);
+    handleDealClick(item._id, item.item_type === 'product' ? 'products' : 'deals');
   }
 
   return (
@@ -84,8 +95,8 @@ export default function Navbar() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                placeholder="Search deals, products, brands…"
+                onFocus={() => results.length > 0 && setShowResults(true)}
+                placeholder="Search mobiles, shoes, jeans, AC, brands…"
                 className="w-full bg-slate-800 text-white placeholder-slate-400 rounded-full px-5 py-2 text-sm outline-none focus:ring-2 focus:ring-brand/50 transition pr-10"
                 autoComplete="off"
               />
@@ -97,21 +108,49 @@ export default function Navbar() {
                 🔍
               </button>
 
-              {showSuggestions && suggestions.length > 0 && (
-                <ul className="absolute top-full mt-1 left-0 right-0 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
-                  {suggestions.map((s) => (
-                    <li key={s}>
-                      <button
-                        type="button"
-                        onMouseDown={() => pickSuggestion(s)}
-                        className="w-full text-left px-5 py-2.5 text-sm text-slate-200 hover:bg-slate-700 truncate flex items-center gap-2"
-                      >
-                        <span className="text-slate-400">🔍</span>
-                        {s}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              {showResults && (
+                <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden max-h-[70vh] overflow-y-auto">
+                  {/* See all results */}
+                  <button
+                    type="button"
+                    onMouseDown={() => { setShowResults(false); navigate(`/search?q=${encodeURIComponent(query.trim())}`); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-brand font-semibold hover:bg-slate-50 border-b border-slate-100 flex items-center gap-2"
+                  >
+                    🔍 See all results for “{query.trim()}”
+                  </button>
+
+                  {results.length === 0 ? (
+                    <p className="px-4 py-4 text-sm text-slate-400 text-center">
+                      {loading ? 'Searching…' : 'No matching products.'}
+                    </p>
+                  ) : (
+                    <ul>
+                      {results.map((item) => (
+                        <li key={item._id}>
+                          <button
+                            type="button"
+                            onMouseDown={() => pickItem(item)}
+                            className="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 transition"
+                          >
+                            <img
+                              src={item.image_url}
+                              alt=""
+                              className="w-10 h-10 object-contain rounded-lg bg-slate-50 shrink-0"
+                              loading="lazy"
+                            />
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-[13px] text-slate-700 line-clamp-1">{item.product_title}</span>
+                              <span className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[13px] font-black text-brand">₹{item.price.toLocaleString('en-IN')}</span>
+                                <span className="text-[10px] text-slate-400">{item.source}</span>
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
           </form>
@@ -156,10 +195,22 @@ export default function Navbar() {
         <div className="overflow-x-auto hide-scrollbar pb-3 -mx-4 px-4">
           <div className="flex gap-2 min-w-max">
             <Link
+              to="/assistant"
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 hover:text-white bg-emerald-500/20 hover:bg-emerald-500/30 px-3 py-1.5 rounded-full whitespace-nowrap transition"
+            >
+              🧞 Ask AI
+            </Link>
+            <Link
               to="/trending"
               className="flex items-center gap-1.5 text-xs font-semibold text-orange-300 hover:text-white bg-orange-500/20 hover:bg-orange-500/30 px-3 py-1.5 rounded-full whitespace-nowrap transition"
             >
               🔥 Trending
+            </Link>
+            <Link
+              to="/price-drops"
+              className="flex items-center gap-1.5 text-xs font-semibold text-green-300 hover:text-white bg-green-500/20 hover:bg-green-500/30 px-3 py-1.5 rounded-full whitespace-nowrap transition"
+            >
+              📉 Price Drops
             </Link>
             {CATEGORIES.map(({ name, icon }) => (
               <Link

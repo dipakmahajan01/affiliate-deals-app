@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { Product } from '../models/Product';
 import { Click } from '../models/Click';
 import { cache } from '../services/cache';
+import { searchProducts } from '../services/productSearch';
 
 const router = Router();
 
@@ -74,20 +75,7 @@ router.get('/search', async (req: Request, res: Response) => {
   const q = (req.query.q as string)?.trim();
   if (!q) return res.json({ data: [] });
 
-  const data = await Product.aggregate([
-    { $match: { is_active: true, $text: { $search: q }, ...HAS_IMAGE } },
-    { $sort: { score: { $meta: 'textScore' } } },
-    {
-      $group: {
-        _id: '$affiliate_url',
-        doc: { $first: '$$ROOT' },
-      },
-    },
-    { $replaceRoot: { newRoot: '$doc' } },
-    { $sort: { score: { $meta: 'textScore' } } },
-    { $limit: 30 },
-  ]);
-
+  const data = await searchProducts({ query: q, limit: 30 });
   res.json({ data });
 });
 

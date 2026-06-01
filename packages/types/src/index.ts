@@ -14,6 +14,14 @@ export interface Deal {
   original_url: string;
   affiliate_url: string;
   image_url?: string;
+  /** Price immediately before the most recent change (set by the refresh cron on a drop). */
+  previous_price?: number;
+  /** Lowest price ever observed for this product. */
+  lowest_price?: number;
+  /** When the most recent price drop was detected. */
+  price_dropped_at?: string;
+  /** Percent the price fell on the most recent drop, e.g. 12 for a 12% drop. */
+  price_drop_percent?: number;
   /** Present on scraped products (Amazon/Flipkart/Myntra detail pages). */
   rating?: number;
   /** Short lines, e.g. Amazon bank discount cards. */

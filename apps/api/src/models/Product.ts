@@ -13,6 +13,11 @@ export interface ProductDoc extends Document {
   resolved_url?: string;
   affiliate_url: string;
   image_url?: string;
+  // Price-drop tracking (maintained by the refresh cron)
+  previous_price?: number;
+  lowest_price?: number;
+  price_dropped_at?: Date;
+  price_drop_percent?: number;
   category: string;
   source: 'Amazon' | 'Flipkart' | 'Myntra';
   posted_at: Date;
@@ -42,6 +47,11 @@ const ProductSchema = new Schema<ProductDoc>(
     resolved_url: { type: String },
     affiliate_url: { type: String, required: true },
     image_url: String,
+    // Price-drop tracking (maintained by the refresh cron)
+    previous_price: Number,
+    lowest_price: Number,
+    price_dropped_at: Date,
+    price_drop_percent: Number,
     category: { type: String, default: 'General' },
     source: { type: String, enum: ['Amazon', 'Flipkart', 'Myntra'], required: true },
     posted_at: { type: Date, default: Date.now },
@@ -75,5 +85,7 @@ ProductSchema.index({ clicks: -1, posted_at: -1 });
 ProductSchema.index({ is_active: 1, posted_at: -1 });
 // Category endpoint: filter is_active+category and sort by posted_at desc.
 ProductSchema.index({ is_active: 1, category: 1, posted_at: -1 });
+// Price-drops feed: filter is_active and sort by most-recent drop.
+ProductSchema.index({ is_active: 1, price_dropped_at: -1 });
 
 export const Product = model<ProductDoc>('Product', ProductSchema);

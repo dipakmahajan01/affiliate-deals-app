@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Deal } from '@deals/types';
 import { useDealClick } from '../hooks/useDealClick';
+import CompareModal from './CompareModal';
 
 interface Props {
   deal: Deal;
@@ -40,6 +41,7 @@ function SourceBadge({ source }: { source: string }) {
 
 export default function DealCard({ deal }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   const handleDealClick = useDealClick();
 
   async function handleBuy() {
@@ -58,6 +60,12 @@ export default function DealCard({ deal }: Props) {
       : null;
 
   const isHotDeal = discount != null && discount >= 40;
+
+  const priceDrop =
+    deal.previous_price && deal.previous_price > deal.price
+      ? deal.price_drop_percent ??
+        Math.round(((deal.previous_price - deal.price) / deal.previous_price) * 100)
+      : null;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex flex-col shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-200 group">
@@ -131,6 +139,19 @@ export default function DealCard({ deal }: Props) {
           )}
         </div>
 
+        {/* Price drop */}
+        {priceDrop != null && priceDrop > 0 && (
+          <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-[11px] font-semibold px-2 py-1.5 rounded-lg">
+            <span className="shrink-0">📉</span>
+            <span className="line-clamp-1">
+              Price dropped {priceDrop}%
+              {deal.previous_price && (
+                <span className="font-normal text-green-600"> · was ₹{deal.previous_price.toLocaleString('en-IN')}</span>
+              )}
+            </span>
+          </div>
+        )}
+
         {/* Coupon */}
         {deal.coupon_text && (
           <div className="flex items-center gap-1.5 bg-amber-50 border border-dashed border-amber-300 text-amber-700 text-[11px] font-medium px-2 py-1.5 rounded-lg">
@@ -162,7 +183,24 @@ export default function DealCard({ deal }: Props) {
           </svg>
           Get This Deal
         </button>
+
+        {/* Compare prices */}
+        <button
+          onClick={() => setShowCompare(true)}
+          className="w-full text-[12px] font-semibold text-slate-500 hover:text-brand py-1.5 flex items-center justify-center gap-1 transition"
+        >
+          ⚖️ Compare prices
+        </button>
       </div>
+
+      {showCompare && (
+        <CompareModal
+          title={deal.product_title}
+          category={deal.category}
+          currentId={deal._id}
+          onClose={() => setShowCompare(false)}
+        />
+      )}
     </div>
   );
 }

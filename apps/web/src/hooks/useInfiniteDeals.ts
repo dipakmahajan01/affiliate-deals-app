@@ -36,3 +36,7 @@ export function fetchFeedByCategory(category: string, page: number): Promise<Pag
 export function fetchFeedSearch(q: string, page: number): Promise<PaginatedResponse<Deal>> {
   return api.get(`/feed/search?q=${encodeURIComponent(q)}&page=${page}`).then((r) => r.data);
 }
+
+export function fetchPriceDrops(page: number): Promise<PaginatedResponse<Deal>> {
+  return api.get(`/feed/price-drops?page=${page}&limit=20`).then((r) => r.data);
+}

@@ -11,7 +11,7 @@ export async function refreshActiveDeals(batchSize = BATCH_SIZE): Promise<{ refr
   const deals = await Product.find({ is_active: true })
     .sort({ scraped_at: 1 })
     .limit(batchSize)
-    .select('_id source resolved_url affiliate_url price original_price product_title')
+    .select('_id source resolved_url affiliate_url price original_price product_title lowest_price')
     .lean();
 
   let refreshed = 0;
@@ -43,6 +43,20 @@ export async function refreshActiveDeals(batchSize = BATCH_SIZE): Promise<{ refr
     let shouldDeactivate = false;
     if (livePrice != null) {
       update.price = livePrice;
+
+      // Track the all-time low and record a price drop when the live price falls below
+      // what we last stored. price_drop_percent + previous_price power the price-drops feed
+      // and the card badge; the public query also requires price < previous_price, so a
+      // later price increase naturally drops the item out of the feed.
+      const prevLow = d.lowest_price ?? d.price ?? livePrice;
+      update.lowest_price = Math.min(prevLow, livePrice);
+
+      if (d.price != null && livePrice < d.price) {
+        update.previous_price = d.price;
+        update.price_dropped_at = now;
+        update.price_drop_percent = Math.round(((d.price - livePrice) / d.price) * 100);
+      }
+
       if (d.price && livePrice > d.price * (1 + EXPIRY_PRICE_INCREASE_THRESHOLD)) {
         shouldDeactivate = true;
       }

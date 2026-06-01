@@ -54,8 +54,14 @@ Both `apps/web` and `apps/admin` proxy `/v1` requests to `http://localhost:4000`
 | `FLIPKART_AFFILIATE_ID` | Fallback Flipkart affid (overridden by DB config) |
 | `JWT_SECRET` | Secret for admin JWT signing |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Admin login credentials |
+| `GEMINI_API_KEY` | Google Gemini (AI Studio) API key for the DealGenie AI shopping assistant |
+| `ASSISTANT_MODEL` | Optional model override for the assistant (default `gemini-2.5-flash`) |
 
 Affiliate tags stored in the `affiliateconfigs` MongoDB collection (editable via admin UI) take precedence over env vars.
+
+## AI shopping assistant (DealGenie)
+
+`apps/api/src/routes/assistant.ts` exposes `POST /v1/assistant/chat`, a Server-Sent Events stream. It runs a Google Gemini (`@google/genai`) streaming function-calling loop: the model calls a `search_products` tool that queries the live `Product` catalog via `apps/api/src/services/productSearch.ts` (the same text-search + `affiliate_url` dedup pipeline as `/v1/products/search`), so every recommendation maps to a real deal. The route streams `text`, `deals`, `done`, and `error` events. The web client (`apps/web/src/api/assistant.ts` + `components/assistant/`) renders streamed text plus a `DealCard` grid, reusing the existing affiliate click flow. The model never sees raw affiliate URLs — cards go through the standard `POST /v1/products/:id/click`.
 
 ## Telegram setup
 

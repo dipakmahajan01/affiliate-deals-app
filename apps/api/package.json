@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@deals/types": "workspace:*",
+    "@google/genai": "^1.0.0",
     "axios": "^1.7.0",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.2.0",
