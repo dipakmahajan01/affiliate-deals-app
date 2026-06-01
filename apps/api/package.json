@@ -15,6 +15,7 @@
     "backfill:images": "tsx src/scripts/backfill-images.ts",
     "backfill:amazon": "tsx src/scripts/backfill-amazon-images.ts",
     "refresh:myntra": "tsx src/scripts/refresh-myntra-images.ts",
+    "fix:prices": "tsx src/scripts/fix-inflated-prices.ts",
     "telegram:login": "tsx src/scripts/telegram-login.ts"
   },
   "dependencies": {

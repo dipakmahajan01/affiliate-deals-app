@@ -17,7 +17,9 @@ export interface ScrapedProduct {
 /** Convert "₹1,499.00" / "Rs. 1499" / "1499" to a positive integer. Returns undefined if not a sane price. */
 function parsePriceText(raw: string | undefined | null): number | undefined {
   if (!raw) return undefined;
-  const cleaned = raw.replace(/[₹$Rs.,\s]/gi, '').match(/\d+(\.\d+)?/);
+  // Strip only thousands separators (commas). Keep the decimal point so "₹299.00" parses as 299,
+  // not 29900 — the regex below skips the leading ₹/Rs and reads the first number itself.
+  const cleaned = raw.replace(/,/g, '').match(/\d+(?:\.\d+)?/);
   if (!cleaned) return undefined;
   const n = parseFloat(cleaned[0]);
   if (!Number.isFinite(n) || n <= 0 || n > 10_000_000) return undefined;
