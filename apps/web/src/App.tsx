@@ -2,7 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Category from './pages/Category';
-import DealDetail from './pages/DealDetail';
+import DigestDeals from './pages/DigestDeals';
 import Search from './pages/Search';
 import Trending from './pages/Trending';
 import PriceDrops from './pages/PriceDrops';
@@ -19,7 +19,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/category/:name" element={<Category />} />
-          <Route path="/deal/:id" element={<DealDetail />} />
+          <Route path="/digest" element={<DigestDeals />} />
           <Route path="/search" element={<Search />} />
           <Route path="/trending" element={<Trending />} />
           <Route path="/price-drops" element={<PriceDrops />} />

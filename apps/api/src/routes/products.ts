@@ -115,6 +115,22 @@ router.get('/category/:cat', async (req: Request, res: Response) => {
   res.json(payload);
 });
 
+// GET /v1/products/by-ids?ids=a,b,c — fetches a specific set of products, preserving the given order.
+// Used by the email digest landing page to show the same products that were emailed.
+router.get('/by-ids', async (req: Request, res: Response) => {
+  const ids = ((req.query.ids as string) ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (ids.length === 0) return res.json({ data: [] });
+
+  const products = await Product.find({ _id: { $in: ids } }).lean();
+  // Tag as 'product' so the client's buy-click handler hits /v1/products/:id/click, not /v1/deals/:id/click.
+  const byId = new Map(products.map((p) => [String(p._id), { ...p, item_type: 'product' as const }]));
+  const data = ids.map((id) => byId.get(id)).filter(Boolean);
+  res.json({ data });
+});
+
 // GET /v1/products/:id
 router.get('/:id', async (req: Request, res: Response) => {
   const product = await Product.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } }, { new: true }).lean();

@@ -42,7 +42,7 @@ export default function Login() {
           <div className="bg-gradient-to-r from-orange-500 to-rose-500 p-6 text-center">
             <Link to="/" className="inline-block mb-1">
               <span className="text-2xl font-black text-white">
-                Deals<span className="text-orange-200">Hub</span>
+                Deal<span className="text-orange-200">Dost</span>
               </span>
             </Link>
             <p className="text-orange-100 text-sm">Sign in to your account</p>

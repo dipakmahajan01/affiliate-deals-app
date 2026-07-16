@@ -11,6 +11,7 @@ import authRoutes from './routes/auth';
 import assistantRoutes from './routes/assistant';
 import { startPoller } from './services/poller';
 import { startRefreshCron } from './services/refresh';
+import { startDigestCron } from './services/digest';
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -30,10 +31,11 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 connectDB().then(async () => {
   app.listen(PORT);
-  startPoller().catch((err) => {
-    console.error('[Poller] failed to start — API will continue without it:', err);
-  });
+  // startPoller().catch((err) => {
+  //   console.error('[Poller] failed to start — API will continue without it:', err);
+  // });
   startRefreshCron();
+  startDigestCron();
 });
 
 process.on('unhandledRejection', (err) => {

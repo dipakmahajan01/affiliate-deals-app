@@ -41,6 +41,8 @@ Both `apps/web` and `apps/admin` proxy `/v1` requests to `http://localhost:4000`
 
 **Affiliate link generation**: `apps/api/src/services/affiliate.ts`. Short URLs are resolved at poll time (not at click time). The stored `affiliate_url` field in MongoDB already has the tag appended. `POST /v1/deals/:id/click` simply returns this stored URL — it never exposes raw affiliate tags to the client.
 
+**Email digest**: `apps/api/src/services/digest.ts` runs two `node-cron` jobs (9 PM and 10 AM) that email every registered `User` the top 5 active products by `price_drop_percent`, reusing the `/v1/feed/price-drops` query shape. `apps/api/src/services/mailer.ts` wraps Nodemailer over Gmail SMTP and also sends a welcome email fired (non-blocking) from `POST /v1/auth/register`.
+
 **Admin auth**: Single-admin JWT flow. Credentials are set via `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars. The JWT is stored in Zustand memory (not localStorage) and attached to every admin API call via an Axios request interceptor in `apps/admin/src/api/client.ts`.
 
 ## Environment variables (apps/api/.env)
@@ -56,6 +58,9 @@ Both `apps/web` and `apps/admin` proxy `/v1` requests to `http://localhost:4000`
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Admin login credentials |
 | `GEMINI_API_KEY` | Google Gemini (AI Studio) API key for the DealGenie AI shopping assistant |
 | `ASSISTANT_MODEL` | Optional model override for the assistant (default `gemini-2.5-flash`) |
+| `EMAIL_USER` | Gmail address used as SMTP sender for welcome/digest emails |
+| `EMAIL_PASS` | Gmail app password (nodemailer SMTP auth) |
+| `EMAIL_FROM` | Optional display "From" header (defaults to `EMAIL_USER`) |
 
 Affiliate tags stored in the `affiliateconfigs` MongoDB collection (editable via admin UI) take precedence over env vars.
 
