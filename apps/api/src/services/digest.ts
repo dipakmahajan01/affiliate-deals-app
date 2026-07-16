@@ -36,9 +36,7 @@ export async function sendDigestToAllUsers(): Promise<{ sent: number; failed: nu
   }
 
   const html = renderDigestEmail(products);
-  // TEST MODE — sending only to this address instead of all users. Revert before deploying.
-  const users = [{ email: 'd6990520@gmail.com' }];
-  // const users = await User.find().select('email').lean();
+  const users = await User.find().select('email').lean();
 
   let sent = 0;
   let failed = 0;
@@ -55,16 +53,12 @@ export async function sendDigestToAllUsers(): Promise<{ sent: number; failed: nu
 }
 
 export function startDigestCron(): void {
-  // TEST MODE — sends every 2 minutes. Revert to the two schedules below before deploying.
-  cron.schedule('*/2 * * * *', () => {
-    sendDigestToAllUsers().catch((err) => console.error('[Digest] ❌ test run failed:', err));
+  // 9 PM server local time
+  cron.schedule('0 21 * * *', () => {
+    sendDigestToAllUsers().catch((err) => console.error('[Digest] ❌ 9PM run failed:', err));
   });
-
-  // Production schedule — 9 PM and 10 AM server local time.
-  // cron.schedule('0 21 * * *', () => {
-  //   sendDigestToAllUsers().catch((err) => console.error('[Digest] ❌ 9PM run failed:', err));
-  // });
-  // cron.schedule('0 10 * * *', () => {
-  //   sendDigestToAllUsers().catch((err) => console.error('[Digest] ❌ 10AM run failed:', err));
-  // });
+  // 10 AM server local time
+  cron.schedule('0 9 * * *', () => {
+    sendDigestToAllUsers().catch((err) => console.error('[Digest] ❌ 9AM run failed:', err));
+  });
 }
