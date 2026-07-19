@@ -58,7 +58,7 @@ async function getTelegramClient(): Promise<TelegramClient> {
 
 type RawMessage = { id: number; text?: string; date?: number };
 
-async function  processMessage(channelUsername: string, msg: RawMessage): Promise<'saved' | 'duplicate' | 'skipped'> {
+async function processMessage(channelUsername: string, msg: RawMessage): Promise<'saved' | 'duplicate' | 'skipped'> {
   if (!msg.text) return 'skipped';
 
   // Persist raw message before any processing
@@ -76,7 +76,7 @@ async function  processMessage(channelUsername: string, msg: RawMessage): Promis
       },
     },
     { upsert: true }
-  ).catch(() => {});
+  ).catch(() => { });
 
   const parsed = parseMessage(msg.text);
   if (!parsed.url || parsed.price === null) return 'skipped';
@@ -166,7 +166,7 @@ async function processScrapedProduct(
       { upsert: true }
     );
     if (result.upsertedCount > 0) {
-      Message.updateOne({ channel_id: channelUsername, message_id: msg.id }, { $set: { processed: true } }).catch(() => {});
+      Message.updateOne({ channel_id: channelUsername, message_id: msg.id }, { $set: { processed: true } }).catch(() => { });
       return 'saved';
     }
     return 'duplicate';
