@@ -31,9 +31,9 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 connectDB().then(async () => {
   app.listen(PORT);
-  // startPoller().catch((err) => {
-  //   console.error('[Poller] failed to start — API will continue without it:', err);
-  // });
+  startPoller().catch((err) => {
+    console.error('[Poller] failed to start — API will continue without it:', err);
+  });
   startRefreshCron();
   startDigestCron();
 });
