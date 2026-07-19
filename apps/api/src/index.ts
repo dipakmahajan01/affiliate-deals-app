@@ -14,7 +14,7 @@ import { startRefreshCron } from './services/refresh';
 import { startDigestCron } from './services/digest';
 
 const app = express();
-const PORT = process.env.PORT ?? 4000;
+const PORT = process.env.PORT;
 
 app.use(cors());
 app.use(express.json());
@@ -30,7 +30,9 @@ app.use('/v1/assistant', assistantRoutes);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 connectDB().then(async () => {
-  app.listen(PORT);
+  app.listen(PORT, () => {
+    console.log(`server is running on ${PORT}`)
+  });
   startPoller().catch((err) => {
     console.error('[Poller] failed to start — API will continue without it:', err);
   });
