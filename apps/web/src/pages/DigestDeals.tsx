@@ -4,6 +4,7 @@ import type { Deal, PaginatedResponse } from '@deals/types';
 import { api } from '../api/client';
 import DealCard from '../components/DealCard';
 import DealSkeleton from '../components/DealSkeleton';
+import Seo from '../components/Seo';
 
 export default function DigestDeals() {
   const [searchParams] = useSearchParams();
@@ -19,6 +20,7 @@ export default function DigestDeals() {
 
   return (
     <div>
+      <Seo title="Your Picks" path="/digest" noindex />
       <div className="bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl px-6 py-8 mb-6 text-center text-white">
         <h1 className="text-2xl font-black mb-1">
           Deal<span className="text-orange-200">Dost</span> Picks

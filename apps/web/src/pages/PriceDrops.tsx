@@ -1,5 +1,6 @@
 import { useInfiniteDeals, fetchPriceDrops } from '../hooks/useInfiniteDeals';
 import InfiniteDealGrid from '../components/InfiniteDealGrid';
+import Seo from '../components/Seo';
 
 export default function PriceDrops() {
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteDeals(
@@ -11,6 +12,11 @@ export default function PriceDrops() {
 
   return (
     <div>
+      <Seo
+        title="Biggest Price Drops"
+        description="Products that just got cheaper on Amazon & Flipkart — track the biggest price drops before they bounce back."
+        path="/price-drops"
+      />
       <h1 className="text-xl font-black text-slate-800 mb-1">📉 Price Drops</h1>
       <p className="text-sm text-slate-500 mb-4">Products that just got cheaper — grab them before prices bounce back.</p>
       {isEmpty ? (

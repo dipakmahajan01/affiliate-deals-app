@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useInfiniteDeals, fetchFeed } from '../hooks/useInfiniteDeals';
 import InfiniteDealGrid from '../components/InfiniteDealGrid';
+import Seo, { SITE_URL, SITE_NAME, DEFAULT_DESCRIPTION } from '../components/Seo';
 
 export default function Home() {
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteDeals(
@@ -10,6 +11,31 @@ export default function Home() {
 
   return (
     <div>
+      <Seo
+        title={`${SITE_NAME} — Best Amazon & Flipkart Deals from Telegram`}
+        description={DEFAULT_DESCRIPTION}
+        path="/"
+        jsonLd={[
+          {
+            '@context': 'https://schema.org',
+            '@type': 'Organization',
+            name: SITE_NAME,
+            url: SITE_URL,
+            logo: `${SITE_URL}/icon-512.png`,
+          },
+          {
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            name: SITE_NAME,
+            url: SITE_URL,
+            potentialAction: {
+              '@type': 'SearchAction',
+              target: `${SITE_URL}/search?q={search_term_string}`,
+              'query-input': 'required name=search_term_string',
+            },
+          },
+        ]}
+      />
       {/* Hero banner */}
       <div className="relative bg-gradient-to-br from-orange-500 via-orange-500 to-rose-500 rounded-2xl p-6 mb-6 overflow-hidden">
         <div className="relative z-10">

@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /signup
+Disallow: /digest
+Disallow: /search
+
+Sitemap: https://dealdost.shop/sitemap.xml

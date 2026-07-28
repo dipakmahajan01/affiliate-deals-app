@@ -1,8 +1,14 @@
 import ChatPanel from '../components/assistant/ChatPanel';
+import Seo from '../components/Seo';
 
 export default function Assistant() {
   return (
     <div className="max-w-3xl mx-auto">
+      <Seo
+        title="DealGenie — AI Shopping Assistant"
+        description="Tell DealGenie what you're looking for and get live Amazon & Flipkart deal recommendations, powered by AI."
+        path="/assistant"
+      />
       <div className="flex items-center gap-2 mb-4">
         <span className="text-2xl">🧞</span>
         <div>
