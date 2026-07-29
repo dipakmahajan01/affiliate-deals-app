@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/authStore';
+import Seo from '../components/Seo';
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function Signup() {
 
   return (
     <div className="min-h-[78vh] flex items-center justify-center px-4 py-12">
+      <Seo title="Sign Up" path="/signup" noindex />
       <div className="w-full max-w-md">
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">

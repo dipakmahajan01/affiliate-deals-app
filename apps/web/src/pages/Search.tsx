@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useInfiniteDeals, fetchFeedSearch } from '../hooks/useInfiniteDeals';
 import InfiniteDealGrid from '../components/InfiniteDealGrid';
+import Seo from '../components/Seo';
 
 // Module-level flag — only fires on the FIRST mount after document load.
 // Subsequent in-app searches won't trigger the redirect.
@@ -30,6 +31,7 @@ export default function Search() {
 
   return (
     <div>
+      <Seo title={`Search results for "${q}"`} path={`/search?q=${encodeURIComponent(q)}`} noindex />
       <h1 className="text-xl font-black text-slate-800 mb-4">Results for &ldquo;{q}&rdquo;</h1>
       <InfiniteDealGrid
         data={data}
