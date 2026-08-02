@@ -17,6 +17,26 @@ const app = express();
 const PORT = process.env.PORT;
 
 app.use(cors());
+
+
+// ✅ Static files FIRST
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// ✅ Catch-all for client-side routing LAST
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+
+
+
+
+
+
+
+
+
+
 app.use(express.json());
 
 app.use('/v1/deals', dealRoutes);
