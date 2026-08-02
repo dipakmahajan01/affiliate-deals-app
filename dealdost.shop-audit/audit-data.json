@@ -1,0 +1,391 @@
+{
+  "summary": {
+    "health_score": 20,
+    "business_type": "E-commerce / Affiliate deals aggregator (Amazon & Flipkart deals sourced from Telegram)",
+    "top_findings": [
+      "Production is serving the raw Vite DEV server (not a build) — /@vite/client, /@react-refresh HMR injections and unbundled /src/main.tsx all return HTTP 200 live",
+      "robots.txt and sitemap.xml both return HTTP 200 but serve the SPA's index.html shell — neither file is reachable, and no static asset in apps/web/public/ is served at all",
+      "No per-deal/product permalink pages exist anywhere (no /deal/:id route) — every deal is a card inside a listing page with no unique, indexable, shareable URL",
+      "Zero structured data (JSON-LD) reaches the live site, despite Organization/WebSite schema already being coded in Home.tsx — blocked purely by the dev-server deployment issue",
+      "Zero FTC/ASCI affiliate disclosure anywhere; no About, Privacy, Terms, or Contact pages exist in the codebase at all",
+      "LCP is 16.1s (home) / 17.2s (trending) — ~6.5x over the 4.0s 'poor' threshold, caused almost entirely by unbundled dev-mode JS module chains",
+      "www.dealdost.shop serves byte-identical duplicate content with no redirect to apex and no canonical tag to disambiguate"
+    ],
+    "quick_wins": [
+      "Deploy `pnpm --filter @deals/web build` output behind nginx instead of running the Vite dev server — single highest-leverage fix, unblocks meta tags, canonical, favicon/manifest, and the already-coded Organization/WebSite JSON-LD for free",
+      "Fix nginx to serve static files (robots.txt, sitemap.xml, icons) before the SPA catch-all — the repo already has reasonably well-formed robots.txt/sitemap.xml, they just never reach a crawler",
+      "301-redirect www.dealdost.shop to the apex domain (TLS cert already covers both hosts)",
+      "Add standard security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy) via nginx add_header",
+      "Remove loading=\"lazy\" from the first above-the-fold product card image (current LCP element)",
+      "Add a footer with an affiliate disclosure statement, About, Privacy, Terms, and Contact — cheap, closes a compliance gap"
+    ]
+  },
+  "categories": [
+    {
+      "name": "Technical SEO",
+      "score": 22,
+      "what_works": [
+        "HTTPS enforced correctly with a valid 301 redirect from http:// to https://",
+        "TLS certificate covers both apex and www hosts",
+        "Mobile viewport meta tag present and correct on all routes",
+        "Content is eventually renderable by a JS-executing crawler (Playwright did extract real product text after a long render) — not a hard JS-blocking wall, purely a performance/timeout risk"
+      ],
+      "findings": [
+        {
+          "title": "Production is running the Vite dev server, not a production build",
+          "severity": "Critical",
+          "description": "https://dealdost.shop/ returns raw dev-server HTML: `/@react-refresh` HMR bootstrap, `<script type=\"module\" src=\"/@vite/client\">`, and unbundled `/src/main.tsx` returns HTTP 200 directly. No hashed `/assets/*.js` production bundle exists anywhere. Cache-Control: no-cache is set site-wide.",
+          "recommendation": "Run `pnpm --filter @deals/web build` to produce apps/web/dist/, and serve that static output via nginx instead of the vite/pnpm dev process."
+        },
+        {
+          "title": "No robots.txt or sitemap.xml reach crawlers",
+          "severity": "Critical",
+          "description": "Both /robots.txt and /sitemap.xml return HTTP 200 but the body is the SPA's index.html shell. sitemap_discovery.py found declared:[] found:[] — nothing valid exists. Files already exist in apps/web/public/ but the deployed dev server doesn't serve static assets at all.",
+          "recommendation": "Fix nginx/static routing so real files in apps/web/public/ (or dist/) are served before the SPA catch-all; redeploy the production build."
+        },
+        {
+          "title": "No canonical tag, meta description, or per-route title anywhere in raw HTML",
+          "severity": "Critical",
+          "description": "Every one of 9 routes tested returns byte-identical <head> content (same Content-Length: 709, same ETag). Seo.tsx (react-helmet-async) is coded to set these client-side, but given the ~17s render time, crawlers may never execute the JS that sets them, and Google deprioritizes JS-injected rel=canonical.",
+          "recommendation": "Resolves automatically once the production build is deployed (index.html already has static description/canonical in the repo). Verify each route gets a distinct Seo.tsx title/canonical post-fix."
+        },
+        {
+          "title": "No indexable per-deal/product URLs",
+          "severity": "Critical",
+          "description": "Routes are limited to /, /category/:name, /digest, /search, /trending, /price-drops, /assistant, /login, /signup. No /deal/:id or /product/:id route exists — individual deals only render as cards inside listing pages.",
+          "recommendation": "Add a /deal/:id detail route with server-renderable-equivalent meta tags per deal; include in the sitemap. Backend data (GET /v1/deals/:id, GET /v1/products/:id) already supports this."
+        },
+        {
+          "title": "www.dealdost.shop serves duplicate content with no redirect and no canonical",
+          "severity": "High",
+          "description": "https://www.dealdost.shop/ returns 200 OK with byte-identical body/ETag to the apex domain. TLS cert covers both hosts so there's no blocker to fixing this at the nginx/DNS level.",
+          "recommendation": "Add an nginx server block that 301-redirects www.dealdost.shop to https://dealdost.shop for all paths."
+        },
+        {
+          "title": "Missing all standard security headers",
+          "severity": "High",
+          "description": "Strict-Transport-Security, Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and Permissions-Policy are all absent from every response.",
+          "recommendation": "Add via nginx add_header: HSTS, X-Content-Type-Options: nosniff, X-Frame-Options: SAMEORIGIN, Referrer-Policy: strict-origin-when-cross-origin, and a CSP scoped to real script/style/API origins once dev-mode injections are removed."
+        },
+        {
+          "title": "No structured data (Schema.org) anywhere on the live site",
+          "severity": "High",
+          "description": "Playwright-rendered structured-data extraction returned block_count: 0 on every route checked, despite visible product cards in rendered text.",
+          "recommendation": "See Schema category — Organization/WebSite JSON-LD is already coded and should appear automatically once the production build ships; add BreadcrumbList and ItemList as new work."
+        },
+        {
+          "title": "Referenced favicon/manifest assets soft-404 to the SPA shell",
+          "severity": "Medium",
+          "description": "/icon-192.png and /manifest.json both return HTTP 200 with Content-Type: text/html (the SPA shell) instead of image/png or application/json. The deployed index.html references stale asset paths that predate the current repo's favicon.svg/apple-touch-icon.png.",
+          "recommendation": "Resolves automatically once the current build is deployed. Separately, configure nginx to return a real 404 for unmatched static-looking paths (*.png, *.json, *.ico)."
+        },
+        {
+          "title": "Soft-404s: unknown paths return 200 with the homepage shell",
+          "severity": "Medium",
+          "description": "GET /nonexistent-page-xyz returns 200 OK, byte-identical to /, with no noindex signal in the raw HTTP response.",
+          "recommendation": "Ensure the client router's not-found state sets noindex via Seo.tsx, and verify it fires given current rendering performance."
+        }
+      ]
+    },
+    {
+      "name": "Content Quality",
+      "score": 15,
+      "what_works": [
+        "Above-the-fold copy (once rendered) is clear and value-prop focused",
+        "Real, differentiated product data (price, discount %, price-drop %, ratings, coupon text, bank offers) already exists in the backend and is richer than most competitors expose"
+      ],
+      "findings": [
+        {
+          "title": "No individual deal/product pages exist",
+          "severity": "Critical",
+          "description": "Deals only appear as DealCard components inside listing pages. DealCard fires the buy action via onClick, not an <a href>, so there isn't even an anchor to expose. This is the root cause of nearly every other content finding.",
+          "recommendation": "Introduce a permalink per deal (/deal/:slug-or-id) with title, price, image, source badge, and stable canonical URL."
+        },
+        {
+          "title": "SEO metadata is coded but never reaches the live page",
+          "severity": "Critical",
+          "description": "Seo.tsx (react-helmet-async) is wired into Home.tsx and Category.tsx to inject per-route title/description/canonical/OG/JSON-LD, but full-render checks on three routes all returned the identical static head. Directly caused by the dev-server-in-production issue.",
+          "recommendation": "Fix production deployment (see Technical); re-verify Helmet output renders per-route afterward."
+        },
+        {
+          "title": "No FTC/ASCI affiliate disclosure anywhere on the site",
+          "severity": "Critical",
+          "description": "Zero matches for 'disclosure', 'affiliate', 'About', 'Contact', 'Privacy', 'Terms', 'FTC', or 'commission' anywhere in rendered HTML/body text. No footer exists. No /about, /disclosure, /privacy, /terms, or /contact route exists in App.tsx at all.",
+          "recommendation": "Add a footer present on every page with an affiliate disclosure statement, About blurb, Privacy Policy, Terms, and a real contact method. Compliance issue, not just SEO."
+        },
+        {
+          "title": "Category pages carry no unique content beyond a templated one-line heading",
+          "severity": "High",
+          "description": "Rendered text for /category/electronics after full JS render was just nav chrome plus a single un-capitalized heading (\"electronics Deals\") with no supporting copy.",
+          "recommendation": "Add a short (100-200 word) category intro — what appears here, update cadence, curation criteria — written once per category, not templated."
+        },
+        {
+          "title": "Deal 'content' is verbatim marketplace copy with no original commentary",
+          "severity": "High",
+          "description": "product_title is copied directly from the first line of the raw Telegram message (itself the marketplace's own listing title) with no rewriting or added commentary. No Experience or Expertise signal per Google's Sept 2025 QRG.",
+          "recommendation": "Add one original sentence per deal at ingestion/curation time using existing previous_price/price_drop_percent data rather than relying solely on the scraped title."
+        },
+        {
+          "title": "No Product/Offer/ItemList schema exists even in source code",
+          "severity": "High",
+          "description": "Home.tsx's JSON-LD only covers Organization and WebSite. No per-deal schema exists, and there's no permalink URL to anchor it to yet.",
+          "recommendation": "Add Product+Offer JSON-LD once per-deal pages exist; add ItemList to listing pages in the meantime."
+        },
+        {
+          "title": "Inconsistent client-side hydration blocks crawler visibility on some routes",
+          "severity": "Medium",
+          "description": "/trending fully rendered its product grid within the Playwright render budget; /category/electronics did not, showing only nav + heading after ~16s.",
+          "recommendation": "Investigate route-to-route fetch/render timing differences; prioritize SSR or static pre-rendering for listing pages."
+        },
+        {
+          "title": "Duplicate content risk from unmodified marketplace titles",
+          "severity": "Medium",
+          "description": "Because product_title is copied verbatim from source listings, the same title strings very likely appear across many other deal-aggregator sites/Telegram channels republishing the same feeds.",
+          "recommendation": "Covered by the original-commentary fix plus stable per-deal URLs — treat as one connected fix."
+        }
+      ]
+    },
+    {
+      "name": "On-Page SEO",
+      "score": 15,
+      "what_works": [
+        "index.html in the current repo (not yet deployed) already has a correct meta description and canonical tag",
+        "Category page title/description template (Seo.tsx) is reasonable, just not yet differentiated with real content"
+      ],
+      "findings": [
+        {
+          "title": "Identical <title> and no meta description on every route in raw HTML",
+          "severity": "Critical",
+          "description": "All 9 routes tested return the exact same 709-byte head with no per-route title variation, poor for CTR and self-competing pages in SERPs.",
+          "recommendation": "Ship the production build so Seo.tsx's per-route titles/descriptions render; add a static fallback description/canonical in index.html itself as already exists in the repo source."
+        },
+        {
+          "title": "No heading hierarchy (0 H1s found on rendered pages in SXO testing)",
+          "severity": "High",
+          "description": "SXO audit found 0 <h1>, 0 <h2> on rendered / and /price-drops after full JS execution.",
+          "recommendation": "Ensure each page template renders a real <h1> (page/category title) as part of the static or SSR'd markup, not solely client-injected."
+        },
+        {
+          "title": "No internal linking to individual deals",
+          "severity": "High",
+          "description": "DealCard uses onClick handlers instead of <a href> links, so there is no crawlable internal link graph pointing at individual products.",
+          "recommendation": "Once per-deal permalinks exist, link DealCard titles to them with real <Link>/<a> elements in addition to the buy button."
+        }
+      ]
+    },
+    {
+      "name": "Schema & Structured Data",
+      "score": 10,
+      "what_works": [
+        "Organization + WebSite (with SearchAction) JSON-LD is already correctly authored in Home.tsx and passes schema validation checks",
+        "Seo.tsx has a working jsonLd prop mechanism via react-helmet-async, and HelmetProvider is correctly wired in main.tsx"
+      ],
+      "findings": [
+        {
+          "title": "Zero JSON-LD/Microdata/RDFa reaches the live site on any route",
+          "severity": "Critical",
+          "description": "structured_data.block_count is 0 on /, /trending, /category/electronics, and /price-drops, both raw and rendered. This is a deployment issue, not a schema-authoring issue — the code exists but the dev-server-in-production issue prevents it from shipping.",
+          "recommendation": "Fix the production deployment (see Technical). Organization/WebSite schema should appear for free once fixed; re-crawl to confirm."
+        },
+        {
+          "title": "No BreadcrumbList on category pages",
+          "severity": "High",
+          "description": "Category.tsx renders /category/:name with no breadcrumb schema.",
+          "recommendation": "Add BreadcrumbList (Home > Category) via the existing jsonLd prop on <Seo> in Category.tsx — trivial effort."
+        },
+        {
+          "title": "No ItemList schema on listing pages",
+          "severity": "Medium",
+          "description": "Home, Trending, PriceDrops, and Category pages show deal grids with no ItemList markup describing them. Without per-deal URLs, this won't qualify for carousel rich results, but is still valuable entity/context data.",
+          "recommendation": "Add ItemList with nested Product/Offer (no item.url yet) populated from the same deal array already rendered by InfiniteDealGrid/DealCard."
+        },
+        {
+          "title": "No Product/Offer schema with rich-result eligibility (dependency, not blocking)",
+          "severity": "Info",
+          "description": "Full Product/Offer schema requires a per-deal permalink URL to anchor to, which doesn't exist yet.",
+          "recommendation": "Once /deal/:id pages ship, add Product + Offer JSON-LD (price, currency, availability, image, seller) using fields already present on the Deal/Product type."
+        }
+      ]
+    },
+    {
+      "name": "Performance (Core Web Vitals)",
+      "score": 54,
+      "what_works": [
+        "CLS = 0 on both routes tested — no layout-shift issues",
+        "TBT (INP lab proxy) is 120-130ms, well under the 200ms 'good' threshold — main-thread JS execution itself is not heavy"
+      ],
+      "findings": [
+        {
+          "title": "LCP is 16.1s (home) / 17.2s (trending) — ~6.5x over the 'poor' threshold",
+          "severity": "Critical",
+          "description": "Lighthouse mobile lab run: LCP 16,128ms / 17,168ms against a 2,500ms 'good' threshold. 90% of the LCP time on /trending is 'Load Delay' — the browser resolving unbundled dev-mode JS module chains before it even starts fetching the LCP image. FCP (9.0-9.3s), Speed Index (12.8-12.9s), and TTI (18.7-19.4s) are all similarly poor. Lighthouse Performance score: 54/100 on both routes.",
+          "recommendation": "Deploy the production `vite build` output instead of the dev server. Expected to cut LCP from ~16-17s to low single digits on its own."
+        },
+        {
+          "title": "Static JS assets served without compression",
+          "severity": "High",
+          "description": "The largest JS chunk (928KB, unminified) returns HTTP 200 with no Content-Encoding header despite the client advertising gzip/br support. Lighthouse estimates 1.7MB of savings from text compression alone sitewide.",
+          "recommendation": "Enable gzip/brotli in nginx for application/javascript, text/javascript, and text/css once the production build is deployed."
+        },
+        {
+          "title": "LCP element uses loading=\"lazy\" despite being above-the-fold",
+          "severity": "High",
+          "description": "The first product card image (Lighthouse's identified LCP element on /trending) has loading=\"lazy\", delaying its fetch until layout completes.",
+          "recommendation": "Use loading=\"eager\" plus fetchpriority=\"high\" for the first N above-the-fold cards; keep lazy-loading for the rest of the grid."
+        },
+        {
+          "title": "TTFB is borderline (230ms / 744ms observed)",
+          "severity": "Medium",
+          "description": "Root document TTFB is right at or above the 200ms 'good' threshold on both routes; likely reflects backend/cold-start latency rather than static-asset serving.",
+          "recommendation": "Re-check after the production build ships; consider short-TTL response caching on feed endpoints given the 10-minute poller cadence."
+        }
+      ]
+    },
+    {
+      "name": "Images",
+      "score": 35,
+      "what_works": [
+        "Product images render correctly once the page loads and are appropriately sized in the layout (no CLS from images)",
+        "Alt text exists via the product title, even if not always clean/descriptive"
+      ],
+      "findings": [
+        {
+          "title": "Product images are hotlinked directly from Amazon/Flipkart with no local optimization or CDN control",
+          "severity": "Low",
+          "description": "deal.image_url is rendered directly with no proxy/CDN rewrite and no explicit width/height attributes.",
+          "recommendation": "Set explicit width/height on <img> to guard against CLS; consider an image proxy/cache as a defensive measure against source images breaking or rate-limiting."
+        },
+        {
+          "title": "LCP candidate image is lazy-loaded (cross-referenced with Performance)",
+          "severity": "High",
+          "description": "See Performance category — the first above-the-fold product image uses loading=\"lazy\", directly harming LCP.",
+          "recommendation": "Switch to eager/fetchpriority=high for the first visible card image."
+        },
+        {
+          "title": "Alt text is raw scraped marketplace title, not always clean",
+          "severity": "Low",
+          "description": "Titles sometimes include marketplace boilerplate (\"Buy X Online at Best Price...\") rather than clean descriptive text.",
+          "recommendation": "Reuse existing title-cleaning logic (used for search indexing) for displayed/alt text as well."
+        }
+      ]
+    },
+    {
+      "name": "AI Search Readiness (GEO)",
+      "score": 10,
+      "what_works": [
+        "Once fully rendered, Playwright does successfully extract real product text, meaning Google's JS-executing systems are not entirely blind to content — the ceiling is render-time, not a hard block"
+      ],
+      "findings": [
+        {
+          "title": "AI crawlers that don't execute JavaScript see nothing",
+          "severity": "Critical",
+          "description": "GPTBot, ClaudeBot, and PerplexityBot user agents were tested directly against the raw response — all received an identical 709-byte empty shell (<div id=\"root\"></div> only), regardless of User-Agent.",
+          "recommendation": "Fix the production deployment first, then evaluate SSR/prerendering (e.g., prerender-on-bot-UA middleware) so first-response HTML contains real deal content."
+        },
+        {
+          "title": "No real robots.txt or llms.txt — well-known AI-crawler paths fall through to the SPA shell",
+          "severity": "Critical",
+          "description": "/robots.txt, /llms.txt, /sitemap.xml, and /ai.txt all return HTTP 200 byte-identical to the homepage shell.",
+          "recommendation": "Fix static-file serving precedence; add explicit Allow rules for GPTBot/OAI-SearchBot/ClaudeBot/PerplexityBot plus a Sitemap: directive, and an llms.txt summarizing the site's purpose and key routes."
+        },
+        {
+          "title": "No permalink URL per deal blocks AI citation structurally",
+          "severity": "Critical",
+          "description": "Even after fixing rendering, an AI answer engine has no stable URL to cite for a specific deal — only an aggregate listing page whose contents rotate every ~10 minutes.",
+          "recommendation": "Add /deal/:id permalink pages with server-rendered title, description, OG tags, and Product/Offer JSON-LD."
+        },
+        {
+          "title": "No meta description, Open Graph, or Twitter Card tags anywhere",
+          "severity": "High",
+          "description": "The entire <head> (raw or rendered) contains only charset, viewport, theme-color, and <title>. This also produces broken link previews when DealDost URLs are shared on Telegram/Twitter/WhatsApp — ironic given Telegram is the product's own distribution channel.",
+          "recommendation": "Add static or dynamically-injected meta description + OG/Twitter tags per route."
+        }
+      ]
+    }
+  ],
+  "supplementary_categories": [
+    {
+      "name": "E-commerce / Affiliate Model (not part of weighted score)",
+      "score": 20,
+      "note": "DealDost owns no inventory or checkout, so Google Merchant Center is correctly N/A. Scored against deal-aggregator competitors instead of traditional storefronts.",
+      "findings": [
+        "Backend already has GET /v1/deals/:id and GET /v1/products/:id with rich per-item data (price, discount_percent, previous_price, lowest_price, rating, bank_offers, coupon_text) — the missing permalink page is a cheap frontend/routing fix, not a data gap.",
+        "The existing GET /v1/feed/compare price-comparison feature is currently only reachable via a client-fetched modal, invisible to crawlers — fold into future deal pages as static content with AggregateOffer schema.",
+        "The 14-day price-drop feed (GET /v1/feed/price-drops) is genuinely differentiated data that few competitors track, but has no per-item indexable URL today."
+      ]
+    },
+    {
+      "name": "Search Experience (SXO) (not part of weighted score)",
+      "score": 8,
+      "note": "SXO Gap Score, not a health-score input. Measures whether the experience matches searcher/Google expectations per query cluster.",
+      "findings": [
+        "Total page-type mismatch: all routes return byte-identical heads with 0 H1s, 0 schema, and zero deal content in extracted text even after a 16-17s render wait.",
+        "Highest-priority persona gap: someone who followed a shared link for one specific deal scores ~8/100 because no per-deal URL exists to land them on that deal.",
+        "Daily-browser and price-verifier personas score 13-18/100 due to missing freshness signals and absent price-history context."
+      ]
+    },
+    {
+      "name": "Backlinks & Authority (not part of weighted score)",
+      "score": null,
+      "note": "Tier 0 analysis (Common Crawl only, no Moz/Bing keys configured). Domain absent from Common Crawl entirely, which is expected/normal for a brand-new site, not a red flag.",
+      "findings": [
+        "Zero referring domains detected — expected for a new domain, not a defect.",
+        "Recommend registering free Moz and Bing Webmaster accounts now for future audit visibility.",
+        "Recommend submitting to deal/coupon directories (DesiDime, FreeKaaMaal, IndianDealsForum) and cross-promoting with the source Telegram channels' own websites/blogs."
+      ]
+    }
+  ],
+  "action_plan": {
+    "phases": [
+      {
+        "name": "Phase 1: Critical Fixes",
+        "timeframe": "Week 1",
+        "items": [
+          "Deploy `pnpm --filter @deals/web build` output behind nginx instead of running the Vite dev server (single highest-leverage fix — unblocks meta tags, canonical, favicon/manifest, and already-coded Organization/WebSite JSON-LD)",
+          "Fix nginx static-file routing so real files (robots.txt, sitemap.xml, icons, manifest.json) are served before the SPA catch-all",
+          "301-redirect www.dealdost.shop to the apex domain",
+          "Add a footer with FTC/ASCI affiliate disclosure, About, Privacy Policy, Terms, and Contact",
+          "Re-crawl the site after deployment to confirm meta tags, canonical, and Organization/WebSite JSON-LD now render live"
+        ]
+      },
+      {
+        "name": "Phase 2: High-Impact Improvements",
+        "timeframe": "Weeks 2-3",
+        "items": [
+          "Add /deal/:id permalink route + page (title, price, image, source badge, rating, coupon/bank offers, price-history callout, Get This Deal CTA) — backend data already exists via GET /v1/deals/:id",
+          "Link every DealCard title to its new permalink page in addition to the existing buy button",
+          "Add Product + Offer JSON-LD to each new deal page; add BreadcrumbList to category pages; add ItemList to listing pages",
+          "Add standard security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy) via nginx",
+          "Enable gzip/brotli compression in nginx for JS/CSS static assets",
+          "Remove loading=\"lazy\" from the first above-the-fold product card image; use eager + fetchpriority=high instead",
+          "Generate a real sitemap.xml covering static routes plus per-deal URLs once they exist (recommend generating server-side in apps/api so lastmod reflects real deal update times)"
+        ]
+      },
+      {
+        "name": "Phase 3: Content & Authority",
+        "timeframe": "Month 2",
+        "items": [
+          "Add a short category-specific intro (100-200 words) to each of the 8 category pages",
+          "Add one original sentence of curation commentary per deal using existing previous_price/price_drop_percent data",
+          "Surface the existing feed/compare price-comparison data as static on-page content with AggregateOffer schema instead of a client-only modal",
+          "Add llms.txt and explicit AI-crawler allow rules (GPTBot, ClaudeBot, PerplexityBot) to robots.txt",
+          "Register free Moz and Bing Webmaster Tools accounts; submit to relevant deal/coupon directories and cross-promote with source Telegram channel admins"
+        ]
+      },
+      {
+        "name": "Phase 4: Monitoring & Iteration",
+        "timeframe": "Ongoing",
+        "items": [
+          "Re-run Lighthouse/PSI after the production deploy to confirm LCP <= 2.5s; pull CrUX field data once traffic accumulates",
+          "Re-run this SEO audit after Phase 1-2 fixes ship to confirm the health score improvement and catch any regressions",
+          "Monitor Search Console (once available) for indexation status of new /deal/:id pages",
+          "Re-run the backlink audit in 60-90 days once outreach begins"
+        ]
+      }
+    ]
+  },
+  "artifacts": {
+    "findings_dir": "findings/",
+    "screenshots_dir": "screenshots/"
+  }
+}

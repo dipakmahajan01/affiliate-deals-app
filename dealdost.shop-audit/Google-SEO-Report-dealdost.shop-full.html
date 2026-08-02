@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: A4;
+    margin: 22mm 18mm 25mm 18mm;
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 9pt;
+      color: #6b7280;
+      font-family: 'DejaVu Serif', 'Times New Roman', Georgia, serif;
+    }
+    @bottom-left {
+      content: "Confidential";
+      font-size: 7pt;
+      color: #d6d3cc;
+      font-family: 'DejaVu Serif', 'Times New Roman', Georgia, serif;
+    }
+    @bottom-right {
+      content: "dealdost.shop Google SEO Report";
+      font-size: 8pt;
+      color: #cbd5e1;
+      font-family: 'DejaVu Serif', 'Times New Roman', Georgia, serif;
+    }
+  }
+
+  @page :first {
+    margin: 0;
+    @bottom-left { content: none; }
+    @bottom-center { content: none; }
+    @bottom-right { content: none; }
+  }
+
+  @page toc {
+    @bottom-center {
+      content: counter(page);
+      font-size: 9pt;
+      color: #6b7280;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Times New Roman', 'DejaVu Serif', Georgia, serif;
+    font-size: 10pt;
+    line-height: 1.55;
+    color: #1e293b;
+    background: white;
+  }
+
+  /* ─── Title Page (Clean White) ─── */
+  .title-page {
+    page: first;
+    width: 210mm;
+    height: 297mm;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: #1a1a2e;
+    position: relative;
+    padding: 50mm 30mm 40mm 30mm;
+    border-top: 6mm solid #1e3a5f;
+  }
+
+  .title-page .badge {
+    background: #f7f6f3;
+    border: 1px solid #d6d3cc;
+    border-radius: 20px;
+    padding: 6px 18px;
+    font-size: 9pt;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 15mm;
+    color: #1e3a5f;
+  }
+
+  .title-page h1 {
+    font-size: 28pt;
+    font-weight: bold;
+    margin-bottom: 5mm;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+    color: #1a1a2e;
+  }
+
+  .title-page .subtitle {
+    font-size: 13pt;
+    color: #6b7280;
+    margin-bottom: 12mm;
+    font-weight: 300;
+  }
+
+  .title-page .url {
+    font-size: 12pt;
+    color: #1e3a5f;
+    margin-bottom: 15mm;
+    padding: 4mm 8mm;
+    border: 1px solid #d6d3cc;
+    border-radius: 6px;
+    background: #faf9f7;
+  }
+
+  .title-page .score-box {
+    background: #faf9f7;
+    border: 2px solid #d6d3cc;
+    border-radius: 12px;
+    padding: 6mm 12mm;
+    margin-bottom: 15mm;
+  }
+
+  .title-page .score-number {
+    font-size: 42pt;
+    font-weight: bold;
+    color: #1e3a5f;
+    line-height: 1;
+  }
+
+  .title-page .score-label {
+    font-size: 10pt;
+    color: #6b7280;
+    margin-top: 2mm;
+  }
+
+  .title-page .meta {
+    font-size: 9pt;
+    color: #6b7280;
+    margin-top: 8mm;
+    padding-top: 5mm;
+    border-top: 1px solid #d6d3cc;
+  }
+
+  .title-page .meta span {
+    margin: 0 8px;
+  }
+
+  /* ─── Table of Contents ─── */
+  .toc-page {
+    page: toc;
+    page-break-before: always;
+  }
+
+  .toc-page h2 {
+    font-size: 18pt;
+    color: #1e3a5f;
+    margin-bottom: 8mm;
+    padding-bottom: 3mm;
+    border-bottom: 2px solid #1e3a5f;
+  }
+
+  .toc-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .toc-list li {
+    padding: 2mm 0;
+    border-bottom: 1px solid #f1f5f9;
+    overflow: hidden;
+  }
+
+  .toc-list li.toc-section {
+    font-weight: bold;
+    font-size: 11pt;
+    padding-top: 4mm;
+    color: #0f172a;
+  }
+
+  .toc-list li.toc-sub {
+    padding-left: 8mm;
+    font-size: 9.5pt;
+    color: #475569;
+  }
+
+  .toc-score {
+    display: inline-block;
+    float: right;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 9pt;
+    font-weight: bold;
+    color: white;
+  }
+
+  .score-good { background: #2d6a4f; }
+  .score-warn { background: #d4740e; }
+  .score-bad { background: #c53030; }
+
+  /* ─── Section Styles ─── */
+  div.section {
+    page-break-before: always;
+  }
+
+  .section-header {
+    background: #faf9f7;
+    border-left: 4px solid #1e3a5f;
+    padding: 5mm 6mm;
+    margin-bottom: 6mm;
+    page-break-after: avoid;
+  }
+
+  .section-header h2 {
+    font-size: 16pt;
+    color: #0f172a;
+    margin-bottom: 1mm;
+  }
+
+  .section-header .section-score {
+    font-size: 12pt;
+    font-weight: bold;
+    float: right;
+    margin-top: -6mm;
+  }
+
+  h3 {
+    font-size: 12pt;
+    color: #1e3a5f;
+    margin-top: 6mm;
+    margin-bottom: 3mm;
+    padding-bottom: 1.5mm;
+    border-bottom: 1px solid #d6d3cc;
+    page-break-after: avoid;
+  }
+
+  h4 {
+    font-size: 10.5pt;
+    color: #334155;
+    margin-top: 4mm;
+    margin-bottom: 2mm;
+    page-break-after: avoid;
+  }
+
+  p {
+    margin-bottom: 3mm;
+    color: #334155;
+  }
+
+  .highlight {
+    background: #fef3c7;
+    border-left: 3px solid #d4740e;
+    padding: 3mm 4mm;
+    margin: 4mm 0;
+    font-size: 9.5pt;
+    /* allow page breaks to prevent white gaps */
+  }
+
+  .critical-box {
+    background: #fef2f2;
+    border-left: 3px solid #c53030;
+    padding: 3mm 4mm;
+    margin: 4mm 0;
+    font-size: 9.5pt;
+    /* allow page breaks to prevent white gaps */
+  }
+
+  .success-box {
+    background: #f0fdf4;
+    border-left: 3px solid #2d6a4f;
+    padding: 3mm 4mm;
+    margin: 4mm 0;
+    font-size: 9.5pt;
+    /* allow page breaks to prevent white gaps */
+  }
+
+  /* ─── Tables ─── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4mm 0 6mm 0;
+    font-size: 9pt;
+  }
+
+  thead th {
+    background: #f7f6f3;
+    color: #0f172a;
+    font-weight: bold;
+    padding: 3mm 4mm;
+    text-align: left;
+    border-bottom: 2px solid #d6d3cc;
+    font-size: 9pt;
+  }
+
+  tbody td {
+    padding: 2.5mm 3mm;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+  }
+
+  tbody tr:nth-child(even) {
+    background: #fdfcfa;
+  }
+
+  .status-pass {
+    color: #2d6a4f;
+    font-weight: bold;
+  }
+
+  .status-fail {
+    color: #c53030;
+    font-weight: bold;
+  }
+
+  .status-warn {
+    color: #d4740e;
+    font-weight: bold;
+  }
+
+  .status-partial {
+    color: #4a5568;
+    font-weight: bold;
+  }
+
+  /* ─── Charts ─── */
+  .chart-container {
+    text-align: center;
+    margin: 4mm 0;
+  }
+
+  .chart-container img {
+    max-width: 100%;
+    max-height: 120mm;
+    height: auto;
+  }
+
+  .chart-caption {
+    font-size: 8.5pt;
+    color: #6b7280;
+    font-style: italic;
+    margin-top: 2mm;
+    text-align: center;
+  }
+
+  .chart-half {
+    display: inline-block;
+    width: 48%;
+    vertical-align: top;
+    text-align: center;
+    margin: 2mm 0;
+  }
+
+  .chart-half img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ─── Two column layout ─── */
+  .two-col {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    margin: 3mm 0;
+  }
+
+  .two-col .col {
+    display: table-cell;
+    vertical-align: top;
+    padding: 0 2mm;
+  }
+
+  .four-col {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    margin: 3mm 0;
+  }
+
+  .four-col .col {
+    display: table-cell;
+    vertical-align: top;
+    padding: 0 1.5mm;
+  }
+
+  /* ─── Metric Cards ─── */
+  .metric-card {
+    background: #faf9f7;
+    border: 1px solid #d6d3cc;
+    border-radius: 6px;
+    padding: 2.5mm 3mm;
+    text-align: center;
+    margin: 2mm 0;
+  }
+
+  .metric-card .value {
+    font-size: 14pt;
+    font-weight: bold;
+    line-height: 1.2;
+  }
+
+  .metric-card .label {
+    font-size: 7.5pt;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 1mm;
+  }
+
+  /* ─── Action Plan ─── */
+  .action-item {
+    background: #faf9f7;
+    border-radius: 4px;
+    padding: 3mm 4mm;
+    margin: 3mm 0;
+    border-left: 3px solid #cbd5e1;
+    /* allow page breaks to prevent white gaps */
+  }
+
+  .action-item.critical {
+    border-left-color: #c53030;
+    background: #fdf2f2;
+  }
+
+  .action-item.high {
+    border-left-color: #d4740e;
+    background: #fdf8ef;
+  }
+
+  .action-item.medium {
+    border-left-color: #1e3a5f;
+    background: #f0f4f8;
+  }
+
+  .action-item.low {
+    border-left-color: #94a3b8;
+  }
+
+  .action-item h4 {
+    margin-top: 0;
+    margin-bottom: 1.5mm;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .action-item .effort {
+    font-size: 8.5pt;
+    color: #64748b;
+    float: right;
+  }
+
+  .priority-tag {
+    display: inline-block;
+    padding: 0.5mm 3mm;
+    border-radius: 3px;
+    font-size: 8pt;
+    font-weight: bold;
+    color: white;
+    margin-right: 2mm;
+    vertical-align: middle;
+  }
+
+  .priority-critical { background: #c53030; }
+  .priority-high { background: #d4740e; }
+  .priority-medium { background: #1e3a5f; }
+  .priority-low { background: #94a3b8; }
+
+  /* ─── Code blocks ─── */
+  .code-block {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 3mm 4mm;
+    border-radius: 4px;
+    font-family: 'DejaVu Sans Mono', monospace;
+    font-size: 8pt;
+    line-height: 1.6;
+    margin: 3mm 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    /* allow page breaks to prevent white gaps */
+  }
+
+  /* ─── Divider ─── */
+  .divider {
+    border: none;
+    border-top: 1px solid #d6d3cc;
+    margin: 5mm 0;
+  }
+
+  /* ─── Roadmap ─── */
+  .roadmap-phase {
+    background: #faf9f7;
+    border-radius: 6px;
+    padding: 4mm 5mm;
+    margin: 4mm 0;
+    border: 1px solid #d6d3cc;
+    /* allow page breaks to prevent white gaps */
+  }
+
+  .roadmap-phase h4 {
+    margin-top: 0;
+    border-bottom: none;
+    color: #1e3a5f;
+  }
+
+  .roadmap-phase ul {
+    margin: 2mm 0 0 5mm;
+    padding: 0;
+  }
+
+  .roadmap-phase li {
+    margin-bottom: 1.5mm;
+    font-size: 9.5pt;
+    color: #334155;
+  }
+
+  /* ─── Lists ─── */
+  ul {
+    margin-left: 5mm;
+    margin-bottom: 3mm;
+  }
+
+  li {
+    margin-bottom: 1.5mm;
+  }
+
+  /* ─── Data freshness ─── */
+  .data-freshness {
+    font-size: 8pt;
+    color: #6b7280;
+    font-style: italic;
+    margin-top: 4mm;
+    padding-top: 2mm;
+    border-top: 1px solid #d6d3cc;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- ======================================================= TITLE PAGE === -->
+<div class="title-page">
+  <div class="badge">Full SEO Audit Report</div>
+  <h1>dealdost.shop</h1>
+  <div class="subtitle">Prepared by Claude SEO</div>
+  <div class="score-box">
+    <div class="score-number">20<span style="font-size: 20pt; color: #94a3b8;">/100</span></div>
+    <div class="score-label">SEO Health Score</div>
+  </div>
+  <div class="meta">
+    <span>August 03, 2026</span>
+    <span>Full Audit</span>
+  </div>
+</div>
+
+
+<!-- ======================================================= TABLE OF CONTENTS === -->
+<div class="toc-page">
+  <h2>Table of Contents</h2>
+  <ul class="toc-list">
+    <li class="toc-section"><span>1. Executive Summary</span></li>
+    <li class="toc-sub"><span>Key Metrics, Critical Issues &amp; Quick Wins</span></li>
+    <li class="toc-section"><span>2. Audit Categories</span></li>
+    <li class="toc-sub"><span>What Works</span></li>
+    <li class="toc-sub"><span>Findings by Severity</span></li>
+    <li class="toc-section"><span>3. Action Plan</span></li>
+    <li class="toc-sub"><span>Phased Roadmap</span></li>
+    <li class="toc-section"><span>4. Data Sources &amp; Methodology</span></li>
+  </ul>
+</div>
+
+
+<!-- ======================================================= 1. EXECUTIVE SUMMARY === -->
+<div class="section">
+  <div class="section-header">
+    <h2>1. Executive Summary</h2>
+  </div>
+
+  <p>This report presents a comprehensive SEO audit of <strong>dealdost.shop</strong> for a <strong>E-commerce / Affiliate deals aggregator (Amazon &amp; Flipkart deals sourced from Telegram)</strong> site, generated on August 03, 2026. Findings combine technical, content, schema, performance, visual, and search-readiness evidence as available.</p>
+
+  <div class="two-col">
+    <div class="col">
+      <div class="metric-card">
+        <div class="value" style="color: #c53030;">20/100</div>
+        <div class="label">SEO Health Score</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="critical-box">
+    <strong>Critical Issues Found:</strong>
+    <ol>
+      <li><strong>Info:</strong> Production is serving the raw Vite DEV server (not a build) — /@vite/client, /@react-refresh HMR injections and unbundled /src/main.tsx all return HTTP 200 live</li>
+      <li><strong>Info:</strong> robots.txt and sitemap.xml both return HTTP 200 but serve the SPA&#x27;s index.html shell — neither file is reachable, and no static asset in apps/web/public/ is served at all</li>
+      <li><strong>Info:</strong> No per-deal/product permalink pages exist anywhere (no /deal/:id route) — every deal is a card inside a listing page with no unique, indexable, shareable URL</li>
+      <li><strong>Info:</strong> Zero structured data (JSON-LD) reaches the live site, despite Organization/WebSite schema already being coded in Home.tsx — blocked purely by the dev-server deployment issue</li>
+      <li><strong>Info:</strong> Zero FTC/ASCI affiliate disclosure anywhere; no About, Privacy, Terms, or Contact pages exist in the codebase at all</li>
+    </ol>
+  </div>
+
+  <div class="success-box">
+    <strong>Quick Wins:</strong>
+    <ol>
+      <li>Deploy `pnpm --filter @deals/web build` output behind nginx instead of running the Vite dev server — single highest-leverage fix, unblocks meta tags, canonical, favicon/manifest, and the already-coded Organization/WebSite JSON-LD for free</li>
+      <li>Fix nginx to serve static files (robots.txt, sitemap.xml, icons) before the SPA catch-all — the repo already has reasonably well-formed robots.txt/sitemap.xml, they just never reach a crawler</li>
+      <li>301-redirect www.dealdost.shop to the apex domain (TLS cert already covers both hosts)</li>
+      <li>Add standard security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy) via nginx add_header</li>
+      <li>Remove loading=&quot;lazy&quot; from the first above-the-fold product card image (current LCP element)</li>
+    </ol>
+  </div>
+
+</div>
+
+<!-- ======================================================= 2. AUDIT CATEGORIES === -->
+<div class="section">
+  <div class="section-header">
+    <h2>2. Audit Categories</h2>
+  </div>
+
+  <h3>2.1 Technical SEO</h3>
+  <p><strong>Score:</strong> <span class="status-fail">22/100</span></p>
+  <h4>What Works</h4>
+  <ul>
+    <li>HTTPS enforced correctly with a valid 301 redirect from http:// to https://</li>
+    <li>TLS certificate covers both apex and www hosts</li>
+    <li>Mobile viewport meta tag present and correct on all routes</li>
+    <li>Content is eventually renderable by a JS-executing crawler (Playwright did extract real product text after a long render) — not a hard JS-blocking wall, purely a performance/timeout risk</li>
+  </ul>
+  <h4>Findings</h4>
+  <div class="action-item medium">
+    <h4>Production is running the Vite dev server, not a production build <span class="status-warn">Critical</span></h4>
+    <p>https://dealdost.shop/ returns raw dev-server HTML: `/@react-refresh` HMR bootstrap, `&lt;script type=&quot;module&quot; src=&quot;/@vite/client&quot;&gt;`, and unbundled `/src/main.tsx` returns HTTP 200 directly. No hashed `/assets/*.js` production bundle exists anywhere. Cache-Control: no-cache is set site-wide.</p>
+    <p><strong>Recommendation:</strong> Run `pnpm --filter @deals/web build` to produce apps/web/dist/, and serve that static output via nginx instead of the vite/pnpm dev process.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No robots.txt or sitemap.xml reach crawlers <span class="status-warn">Critical</span></h4>
+    <p>Both /robots.txt and /sitemap.xml return HTTP 200 but the body is the SPA&#x27;s index.html shell. sitemap_discovery.py found declared:[] found:[] — nothing valid exists. Files already exist in apps/web/public/ but the deployed dev server doesn&#x27;t serve static assets at all.</p>
+    <p><strong>Recommendation:</strong> Fix nginx/static routing so real files in apps/web/public/ (or dist/) are served before the SPA catch-all; redeploy the production build.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No canonical tag, meta description, or per-route title anywhere in raw HTML <span class="status-warn">Critical</span></h4>
+    <p>Every one of 9 routes tested returns byte-identical &lt;head&gt; content (same Content-Length: 709, same ETag). Seo.tsx (react-helmet-async) is coded to set these client-side, but given the ~17s render time, crawlers may never execute the JS that sets them, and Google deprioritizes JS-injected rel=canonical.</p>
+    <p><strong>Recommendation:</strong> Resolves automatically once the production build is deployed (index.html already has static description/canonical in the repo). Verify each route gets a distinct Seo.tsx title/canonical post-fix.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No indexable per-deal/product URLs <span class="status-warn">Critical</span></h4>
+    <p>Routes are limited to /, /category/:name, /digest, /search, /trending, /price-drops, /assistant, /login, /signup. No /deal/:id or /product/:id route exists — individual deals only render as cards inside listing pages.</p>
+    <p><strong>Recommendation:</strong> Add a /deal/:id detail route with server-renderable-equivalent meta tags per deal; include in the sitemap. Backend data (GET /v1/deals/:id, GET /v1/products/:id) already supports this.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>www.dealdost.shop serves duplicate content with no redirect and no canonical <span class="status-warn">High</span></h4>
+    <p>https://www.dealdost.shop/ returns 200 OK with byte-identical body/ETag to the apex domain. TLS cert covers both hosts so there&#x27;s no blocker to fixing this at the nginx/DNS level.</p>
+    <p><strong>Recommendation:</strong> Add an nginx server block that 301-redirects www.dealdost.shop to https://dealdost.shop for all paths.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Missing all standard security headers <span class="status-warn">High</span></h4>
+    <p>Strict-Transport-Security, Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and Permissions-Policy are all absent from every response.</p>
+    <p><strong>Recommendation:</strong> Add via nginx add_header: HSTS, X-Content-Type-Options: nosniff, X-Frame-Options: SAMEORIGIN, Referrer-Policy: strict-origin-when-cross-origin, and a CSP scoped to real script/style/API origins once dev-mode injections are removed.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No structured data (Schema.org) anywhere on the live site <span class="status-warn">High</span></h4>
+    <p>Playwright-rendered structured-data extraction returned block_count: 0 on every route checked, despite visible product cards in rendered text.</p>
+    <p><strong>Recommendation:</strong> See Schema category — Organization/WebSite JSON-LD is already coded and should appear automatically once the production build ships; add BreadcrumbList and ItemList as new work.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Referenced favicon/manifest assets soft-404 to the SPA shell <span class="status-warn">Medium</span></h4>
+    <p>/icon-192.png and /manifest.json both return HTTP 200 with Content-Type: text/html (the SPA shell) instead of image/png or application/json. The deployed index.html references stale asset paths that predate the current repo&#x27;s favicon.svg/apple-touch-icon.png.</p>
+    <p><strong>Recommendation:</strong> Resolves automatically once the current build is deployed. Separately, configure nginx to return a real 404 for unmatched static-looking paths (*.png, *.json, *.ico).</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Soft-404s: unknown paths return 200 with the homepage shell <span class="status-warn">Medium</span></h4>
+    <p>GET /nonexistent-page-xyz returns 200 OK, byte-identical to /, with no noindex signal in the raw HTTP response.</p>
+    <p><strong>Recommendation:</strong> Ensure the client router&#x27;s not-found state sets noindex via Seo.tsx, and verify it fires given current rendering performance.</p>
+  </div>
+  <hr class="divider">
+  <h3>2.2 Content Quality</h3>
+  <p><strong>Score:</strong> <span class="status-fail">15/100</span></p>
+  <h4>What Works</h4>
+  <ul>
+    <li>Above-the-fold copy (once rendered) is clear and value-prop focused</li>
+    <li>Real, differentiated product data (price, discount %, price-drop %, ratings, coupon text, bank offers) already exists in the backend and is richer than most competitors expose</li>
+  </ul>
+  <h4>Findings</h4>
+  <div class="action-item medium">
+    <h4>No individual deal/product pages exist <span class="status-warn">Critical</span></h4>
+    <p>Deals only appear as DealCard components inside listing pages. DealCard fires the buy action via onClick, not an &lt;a href&gt;, so there isn&#x27;t even an anchor to expose. This is the root cause of nearly every other content finding.</p>
+    <p><strong>Recommendation:</strong> Introduce a permalink per deal (/deal/:slug-or-id) with title, price, image, source badge, and stable canonical URL.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>SEO metadata is coded but never reaches the live page <span class="status-warn">Critical</span></h4>
+    <p>Seo.tsx (react-helmet-async) is wired into Home.tsx and Category.tsx to inject per-route title/description/canonical/OG/JSON-LD, but full-render checks on three routes all returned the identical static head. Directly caused by the dev-server-in-production issue.</p>
+    <p><strong>Recommendation:</strong> Fix production deployment (see Technical); re-verify Helmet output renders per-route afterward.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No FTC/ASCI affiliate disclosure anywhere on the site <span class="status-warn">Critical</span></h4>
+    <p>Zero matches for &#x27;disclosure&#x27;, &#x27;affiliate&#x27;, &#x27;About&#x27;, &#x27;Contact&#x27;, &#x27;Privacy&#x27;, &#x27;Terms&#x27;, &#x27;FTC&#x27;, or &#x27;commission&#x27; anywhere in rendered HTML/body text. No footer exists. No /about, /disclosure, /privacy, /terms, or /contact route exists in App.tsx at all.</p>
+    <p><strong>Recommendation:</strong> Add a footer present on every page with an affiliate disclosure statement, About blurb, Privacy Policy, Terms, and a real contact method. Compliance issue, not just SEO.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Category pages carry no unique content beyond a templated one-line heading <span class="status-warn">High</span></h4>
+    <p>Rendered text for /category/electronics after full JS render was just nav chrome plus a single un-capitalized heading (&quot;electronics Deals&quot;) with no supporting copy.</p>
+    <p><strong>Recommendation:</strong> Add a short (100-200 word) category intro — what appears here, update cadence, curation criteria — written once per category, not templated.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Deal &#x27;content&#x27; is verbatim marketplace copy with no original commentary <span class="status-warn">High</span></h4>
+    <p>product_title is copied directly from the first line of the raw Telegram message (itself the marketplace&#x27;s own listing title) with no rewriting or added commentary. No Experience or Expertise signal per Google&#x27;s Sept 2025 QRG.</p>
+    <p><strong>Recommendation:</strong> Add one original sentence per deal at ingestion/curation time using existing previous_price/price_drop_percent data rather than relying solely on the scraped title.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No Product/Offer/ItemList schema exists even in source code <span class="status-warn">High</span></h4>
+    <p>Home.tsx&#x27;s JSON-LD only covers Organization and WebSite. No per-deal schema exists, and there&#x27;s no permalink URL to anchor it to yet.</p>
+    <p><strong>Recommendation:</strong> Add Product+Offer JSON-LD once per-deal pages exist; add ItemList to listing pages in the meantime.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Inconsistent client-side hydration blocks crawler visibility on some routes <span class="status-warn">Medium</span></h4>
+    <p>/trending fully rendered its product grid within the Playwright render budget; /category/electronics did not, showing only nav + heading after ~16s.</p>
+    <p><strong>Recommendation:</strong> Investigate route-to-route fetch/render timing differences; prioritize SSR or static pre-rendering for listing pages.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Duplicate content risk from unmodified marketplace titles <span class="status-warn">Medium</span></h4>
+    <p>Because product_title is copied verbatim from source listings, the same title strings very likely appear across many other deal-aggregator sites/Telegram channels republishing the same feeds.</p>
+    <p><strong>Recommendation:</strong> Covered by the original-commentary fix plus stable per-deal URLs — treat as one connected fix.</p>
+  </div>
+  <hr class="divider">
+  <h3>2.3 On-Page SEO</h3>
+  <p><strong>Score:</strong> <span class="status-fail">15/100</span></p>
+  <h4>What Works</h4>
+  <ul>
+    <li>index.html in the current repo (not yet deployed) already has a correct meta description and canonical tag</li>
+    <li>Category page title/description template (Seo.tsx) is reasonable, just not yet differentiated with real content</li>
+  </ul>
+  <h4>Findings</h4>
+  <div class="action-item medium">
+    <h4>Identical &lt;title&gt; and no meta description on every route in raw HTML <span class="status-warn">Critical</span></h4>
+    <p>All 9 routes tested return the exact same 709-byte head with no per-route title variation, poor for CTR and self-competing pages in SERPs.</p>
+    <p><strong>Recommendation:</strong> Ship the production build so Seo.tsx&#x27;s per-route titles/descriptions render; add a static fallback description/canonical in index.html itself as already exists in the repo source.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No heading hierarchy (0 H1s found on rendered pages in SXO testing) <span class="status-warn">High</span></h4>
+    <p>SXO audit found 0 &lt;h1&gt;, 0 &lt;h2&gt; on rendered / and /price-drops after full JS execution.</p>
+    <p><strong>Recommendation:</strong> Ensure each page template renders a real &lt;h1&gt; (page/category title) as part of the static or SSR&#x27;d markup, not solely client-injected.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No internal linking to individual deals <span class="status-warn">High</span></h4>
+    <p>DealCard uses onClick handlers instead of &lt;a href&gt; links, so there is no crawlable internal link graph pointing at individual products.</p>
+    <p><strong>Recommendation:</strong> Once per-deal permalinks exist, link DealCard titles to them with real &lt;Link&gt;/&lt;a&gt; elements in addition to the buy button.</p>
+  </div>
+  <hr class="divider">
+  <h3>2.4 Schema &amp; Structured Data</h3>
+  <p><strong>Score:</strong> <span class="status-fail">10/100</span></p>
+  <h4>What Works</h4>
+  <ul>
+    <li>Organization + WebSite (with SearchAction) JSON-LD is already correctly authored in Home.tsx and passes schema validation checks</li>
+    <li>Seo.tsx has a working jsonLd prop mechanism via react-helmet-async, and HelmetProvider is correctly wired in main.tsx</li>
+  </ul>
+  <h4>Findings</h4>
+  <div class="action-item medium">
+    <h4>Zero JSON-LD/Microdata/RDFa reaches the live site on any route <span class="status-warn">Critical</span></h4>
+    <p>structured_data.block_count is 0 on /, /trending, /category/electronics, and /price-drops, both raw and rendered. This is a deployment issue, not a schema-authoring issue — the code exists but the dev-server-in-production issue prevents it from shipping.</p>
+    <p><strong>Recommendation:</strong> Fix the production deployment (see Technical). Organization/WebSite schema should appear for free once fixed; re-crawl to confirm.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No BreadcrumbList on category pages <span class="status-warn">High</span></h4>
+    <p>Category.tsx renders /category/:name with no breadcrumb schema.</p>
+    <p><strong>Recommendation:</strong> Add BreadcrumbList (Home &gt; Category) via the existing jsonLd prop on &lt;Seo&gt; in Category.tsx — trivial effort.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No ItemList schema on listing pages <span class="status-warn">Medium</span></h4>
+    <p>Home, Trending, PriceDrops, and Category pages show deal grids with no ItemList markup describing them. Without per-deal URLs, this won&#x27;t qualify for carousel rich results, but is still valuable entity/context data.</p>
+    <p><strong>Recommendation:</strong> Add ItemList with nested Product/Offer (no item.url yet) populated from the same deal array already rendered by InfiniteDealGrid/DealCard.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No Product/Offer schema with rich-result eligibility (dependency, not blocking) <span class="status-warn">Info</span></h4>
+    <p>Full Product/Offer schema requires a per-deal permalink URL to anchor to, which doesn&#x27;t exist yet.</p>
+    <p><strong>Recommendation:</strong> Once /deal/:id pages ship, add Product + Offer JSON-LD (price, currency, availability, image, seller) using fields already present on the Deal/Product type.</p>
+  </div>
+  <hr class="divider">
+  <h3>2.5 Performance (Core Web Vitals)</h3>
+  <p><strong>Score:</strong> <span class="status-warn">54/100</span></p>
+  <h4>What Works</h4>
+  <ul>
+    <li>CLS = 0 on both routes tested — no layout-shift issues</li>
+    <li>TBT (INP lab proxy) is 120-130ms, well under the 200ms &#x27;good&#x27; threshold — main-thread JS execution itself is not heavy</li>
+  </ul>
+  <h4>Findings</h4>
+  <div class="action-item medium">
+    <h4>LCP is 16.1s (home) / 17.2s (trending) — ~6.5x over the &#x27;poor&#x27; threshold <span class="status-warn">Critical</span></h4>
+    <p>Lighthouse mobile lab run: LCP 16,128ms / 17,168ms against a 2,500ms &#x27;good&#x27; threshold. 90% of the LCP time on /trending is &#x27;Load Delay&#x27; — the browser resolving unbundled dev-mode JS module chains before it even starts fetching the LCP image. FCP (9.0-9.3s), Speed Index (12.8-12.9s), and TTI (18.7-19.4s) are all similarly poor. Lighthouse Performance score: 54/100 on both routes.</p>
+    <p><strong>Recommendation:</strong> Deploy the production `vite build` output instead of the dev server. Expected to cut LCP from ~16-17s to low single digits on its own.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Static JS assets served without compression <span class="status-warn">High</span></h4>
+    <p>The largest JS chunk (928KB, unminified) returns HTTP 200 with no Content-Encoding header despite the client advertising gzip/br support. Lighthouse estimates 1.7MB of savings from text compression alone sitewide.</p>
+    <p><strong>Recommendation:</strong> Enable gzip/brotli in nginx for application/javascript, text/javascript, and text/css once the production build is deployed.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>LCP element uses loading=&quot;lazy&quot; despite being above-the-fold <span class="status-warn">High</span></h4>
+    <p>The first product card image (Lighthouse&#x27;s identified LCP element on /trending) has loading=&quot;lazy&quot;, delaying its fetch until layout completes.</p>
+    <p><strong>Recommendation:</strong> Use loading=&quot;eager&quot; plus fetchpriority=&quot;high&quot; for the first N above-the-fold cards; keep lazy-loading for the rest of the grid.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>TTFB is borderline (230ms / 744ms observed) <span class="status-warn">Medium</span></h4>
+    <p>Root document TTFB is right at or above the 200ms &#x27;good&#x27; threshold on both routes; likely reflects backend/cold-start latency rather than static-asset serving.</p>
+    <p><strong>Recommendation:</strong> Re-check after the production build ships; consider short-TTL response caching on feed endpoints given the 10-minute poller cadence.</p>
+  </div>
+  <hr class="divider">
+  <h3>2.6 Images</h3>
+  <p><strong>Score:</strong> <span class="status-fail">35/100</span></p>
+  <h4>What Works</h4>
+  <ul>
+    <li>Product images render correctly once the page loads and are appropriately sized in the layout (no CLS from images)</li>
+    <li>Alt text exists via the product title, even if not always clean/descriptive</li>
+  </ul>
+  <h4>Findings</h4>
+  <div class="action-item medium">
+    <h4>Product images are hotlinked directly from Amazon/Flipkart with no local optimization or CDN control <span class="status-warn">Low</span></h4>
+    <p>deal.image_url is rendered directly with no proxy/CDN rewrite and no explicit width/height attributes.</p>
+    <p><strong>Recommendation:</strong> Set explicit width/height on &lt;img&gt; to guard against CLS; consider an image proxy/cache as a defensive measure against source images breaking or rate-limiting.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>LCP candidate image is lazy-loaded (cross-referenced with Performance) <span class="status-warn">High</span></h4>
+    <p>See Performance category — the first above-the-fold product image uses loading=&quot;lazy&quot;, directly harming LCP.</p>
+    <p><strong>Recommendation:</strong> Switch to eager/fetchpriority=high for the first visible card image.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>Alt text is raw scraped marketplace title, not always clean <span class="status-warn">Low</span></h4>
+    <p>Titles sometimes include marketplace boilerplate (&quot;Buy X Online at Best Price...&quot;) rather than clean descriptive text.</p>
+    <p><strong>Recommendation:</strong> Reuse existing title-cleaning logic (used for search indexing) for displayed/alt text as well.</p>
+  </div>
+  <hr class="divider">
+  <h3>2.7 AI Search Readiness (GEO)</h3>
+  <p><strong>Score:</strong> <span class="status-fail">10/100</span></p>
+  <h4>What Works</h4>
+  <ul>
+    <li>Once fully rendered, Playwright does successfully extract real product text, meaning Google&#x27;s JS-executing systems are not entirely blind to content — the ceiling is render-time, not a hard block</li>
+  </ul>
+  <h4>Findings</h4>
+  <div class="action-item medium">
+    <h4>AI crawlers that don&#x27;t execute JavaScript see nothing <span class="status-warn">Critical</span></h4>
+    <p>GPTBot, ClaudeBot, and PerplexityBot user agents were tested directly against the raw response — all received an identical 709-byte empty shell (&lt;div id=&quot;root&quot;&gt;&lt;/div&gt; only), regardless of User-Agent.</p>
+    <p><strong>Recommendation:</strong> Fix the production deployment first, then evaluate SSR/prerendering (e.g., prerender-on-bot-UA middleware) so first-response HTML contains real deal content.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No real robots.txt or llms.txt — well-known AI-crawler paths fall through to the SPA shell <span class="status-warn">Critical</span></h4>
+    <p>/robots.txt, /llms.txt, /sitemap.xml, and /ai.txt all return HTTP 200 byte-identical to the homepage shell.</p>
+    <p><strong>Recommendation:</strong> Fix static-file serving precedence; add explicit Allow rules for GPTBot/OAI-SearchBot/ClaudeBot/PerplexityBot plus a Sitemap: directive, and an llms.txt summarizing the site&#x27;s purpose and key routes.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No permalink URL per deal blocks AI citation structurally <span class="status-warn">Critical</span></h4>
+    <p>Even after fixing rendering, an AI answer engine has no stable URL to cite for a specific deal — only an aggregate listing page whose contents rotate every ~10 minutes.</p>
+    <p><strong>Recommendation:</strong> Add /deal/:id permalink pages with server-rendered title, description, OG tags, and Product/Offer JSON-LD.</p>
+  </div>
+  <div class="action-item medium">
+    <h4>No meta description, Open Graph, or Twitter Card tags anywhere <span class="status-warn">High</span></h4>
+    <p>The entire &lt;head&gt; (raw or rendered) contains only charset, viewport, theme-color, and &lt;title&gt;. This also produces broken link previews when DealDost URLs are shared on Telegram/Twitter/WhatsApp — ironic given Telegram is the product&#x27;s own distribution channel.</p>
+    <p><strong>Recommendation:</strong> Add static or dynamically-injected meta description + OG/Twitter tags per route.</p>
+  </div>
+  <hr class="divider">
+</div>
+
+<!-- ======================================================= 3. ACTION PLAN === -->
+<div class="section">
+  <div class="section-header">
+    <h2>3. Action Plan</h2>
+  </div>
+
+  <div class="roadmap-phase">
+    <h4>Phase 1: Critical Fixes <span class="effort">Week 1</span></h4>
+    <ul>
+      <li>Deploy `pnpm --filter @deals/web build` output behind nginx instead of running the Vite dev server (single highest-leverage fix — unblocks meta tags, canonical, favicon/manifest, and already-coded Organization/WebSite JSON-LD)</li>
+      <li>Fix nginx static-file routing so real files (robots.txt, sitemap.xml, icons, manifest.json) are served before the SPA catch-all</li>
+      <li>301-redirect www.dealdost.shop to the apex domain</li>
+      <li>Add a footer with FTC/ASCI affiliate disclosure, About, Privacy Policy, Terms, and Contact</li>
+      <li>Re-crawl the site after deployment to confirm meta tags, canonical, and Organization/WebSite JSON-LD now render live</li>
+    </ul>
+  </div>
+  <div class="roadmap-phase">
+    <h4>Phase 2: High-Impact Improvements <span class="effort">Weeks 2-3</span></h4>
+    <ul>
+      <li>Add /deal/:id permalink route + page (title, price, image, source badge, rating, coupon/bank offers, price-history callout, Get This Deal CTA) — backend data already exists via GET /v1/deals/:id</li>
+      <li>Link every DealCard title to its new permalink page in addition to the existing buy button</li>
+      <li>Add Product + Offer JSON-LD to each new deal page; add BreadcrumbList to category pages; add ItemList to listing pages</li>
+      <li>Add standard security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy) via nginx</li>
+      <li>Enable gzip/brotli compression in nginx for JS/CSS static assets</li>
+      <li>Remove loading=&quot;lazy&quot; from the first above-the-fold product card image; use eager + fetchpriority=high instead</li>
+      <li>Generate a real sitemap.xml covering static routes plus per-deal URLs once they exist (recommend generating server-side in apps/api so lastmod reflects real deal update times)</li>
+    </ul>
+  </div>
+  <div class="roadmap-phase">
+    <h4>Phase 3: Content &amp; Authority <span class="effort">Month 2</span></h4>
+    <ul>
+      <li>Add a short category-specific intro (100-200 words) to each of the 8 category pages</li>
+      <li>Add one original sentence of curation commentary per deal using existing previous_price/price_drop_percent data</li>
+      <li>Surface the existing feed/compare price-comparison data as static on-page content with AggregateOffer schema instead of a client-only modal</li>
+      <li>Add llms.txt and explicit AI-crawler allow rules (GPTBot, ClaudeBot, PerplexityBot) to robots.txt</li>
+      <li>Register free Moz and Bing Webmaster Tools accounts; submit to relevant deal/coupon directories and cross-promote with source Telegram channel admins</li>
+    </ul>
+  </div>
+  <div class="roadmap-phase">
+    <h4>Phase 4: Monitoring &amp; Iteration <span class="effort">Ongoing</span></h4>
+    <ul>
+      <li>Re-run Lighthouse/PSI after the production deploy to confirm LCP &lt;= 2.5s; pull CrUX field data once traffic accumulates</li>
+      <li>Re-run this SEO audit after Phase 1-2 fixes ship to confirm the health score improvement and catch any regressions</li>
+      <li>Monitor Search Console (once available) for indexation status of new /deal/:id pages</li>
+      <li>Re-run the backlink audit in 60-90 days once outreach begins</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ======================================================= DATA SOURCES & METHODOLOGY === -->
+<div class="section" style="text-align: center; padding-top: 15mm;">
+  <hr class="divider">
+  <h3 style="text-align: left;">Data Sources &amp; Methodology</h3>
+  <table>
+    <thead>
+      <tr><th>Source</th><th>Description</th><th>Update Frequency</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>PageSpeed Insights API</td>
+          <td>Lighthouse lab audit (mobile emulation, Moto G Power, slow 4G)</td>
+          <td>Real-time</td></tr>
+      <tr><td>Chrome UX Report (CrUX)</td>
+          <td>28-day rolling field data from real Chrome users</td>
+          <td>Daily ~04:00 UTC</td></tr>
+      <tr><td>CrUX History API</td>
+          <td>25-week p75 trend data per metric</td>
+          <td>Weekly</td></tr>
+      <tr><td>Google Search Console</td>
+          <td>Search Analytics (clicks, impressions, CTR, position)</td>
+          <td>2-3 day lag</td></tr>
+      <tr><td>URL Inspection API</td>
+          <td>Per-URL index status, coverage state, crawl info</td>
+          <td>Real-time (2,000/day)</td></tr>
+    </tbody>
+  </table>
+  <p style="color: #94a3b8; font-size: 9pt; margin-top: 5mm;">
+    Report generated by Claude SEO &mdash; Google SEO Intelligence Skill &mdash; August 03, 2026<br>
+    Methodology based on Google Web Vitals thresholds, Search Console documentation, and Lighthouse scoring algorithms.
+  </p>
+</div>
+
+</body>
+</html>

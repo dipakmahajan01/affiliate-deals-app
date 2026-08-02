@@ -12,7 +12,8 @@ import assistantRoutes from './routes/assistant';
 import { startPoller } from './services/poller';
 import { startRefreshCron } from './services/refresh';
 import { startDigestCron } from './services/digest';
-import path from 'path';
+import path from 'path'
+
 const app = express();
 const PORT = process.env.PORT;
 

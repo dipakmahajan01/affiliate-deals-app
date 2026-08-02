@@ -1,0 +1,35 @@
+{
+  "url": "https://dealdost.shop/",
+  "status_code": 200,
+  "content": "<!DOCTYPE html><html lang=\"en\"><head>\n    <script type=\"module\">import { injectIntoGlobalHook } from \"/@react-refresh\";\ninjectIntoGlobalHook(window);\nwindow.$RefreshReg$ = () => {};\nwindow.$RefreshSig$ = () => (type) => type;</script>\n\n    <script type=\"module\" src=\"/@vite/client\"></script>\n\n    <meta charset=\"UTF-8\">\n    <link rel=\"icon\" type=\"image/png\" href=\"/icon-192.png\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <meta name=\"theme-color\" content=\"#f97316...",
+  "raw_content": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <script type=\"module\">import { injectIntoGlobalHook } from \"/@react-refresh\";\ninjectIntoGlobalHook(window);\nwindow.$RefreshReg$ = () => {};\nwindow.$Refres...",
+  "is_spa": true,
+  "extracted_text": "Deal\nDost\n\ud83d\udd0d\nLogin\nSign Up\n\ud83e\uddde Ask AI\n\ud83d\udd25 Trending\n\ud83d\udcc9 Price Drops\n\ud83d\udcbb\nElectronics\n\ud83c\udf73\nKitchen\n\ud83d\udc57\nFashion\n\ud83d\udc84\nBeauty\n\ud83d\udcda\nBooks\n\ud83d\uded2\nGrocery\n\u26bd\nSports\n\ud83c\udfe0\nHome\nUpdated Daily\nBest Deals,\nHandpicked For You \ud83d\udecd\nSavings from Amazon, Flipkart & more \u2014 all in one place\n\ud83d\udd25 See Trending Deals\nLatest Deals\n\ud83e\uddde",
+  "publication_date": null,
+  "accessibility_tree": null,
+  "headers": {
+    "cache-control": "no-cache",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "text/html",
+    "date": "Sun, 02 Aug 2026 19:27:36 GMT",
+    "etag": "W/\"2c5-InUu2TyONOk98U9wiMpbABVzZbg\"",
+    "server": "nginx/1.28.3 (Ubuntu)",
+    "transfer-encoding": "chunked",
+    "vary": "Origin"
+  },
+  "redirect_chain": [],
+  "console_errors": [],
+  "render_diagnostics": [],
+  "render_engine": "playwright-chromium",
+  "render_ms": 16210.406500002136,
+  "mode_used": "rendered",
+  "error": null,
+  "structured_data": {
+    "block_count": 0,
+    "processed_count": 0,
+    "total_bytes": 0,
+    "truncated": false,
+    "blocks": []
+  }
+}
