@@ -13,6 +13,7 @@
     "@deals/types": "workspace:*",
     "@tanstack/react-query": "^5.45.0",
     "axios": "^1.7.0",
+    "next": "^16.3.5",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-helmet-async": "^3.0.0",
