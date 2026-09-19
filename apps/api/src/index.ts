@@ -17,7 +17,10 @@ import path from 'path'
 const app = express();
 const PORT = process.env.PORT;
 
-app.use(cors());
+  app.use(cors({
+    origin: "https://dealsweb-production.up.railway.app",
+    credentials: true
+  }));
 
 
 // ✅ Static files FIRST
