@@ -15,7 +15,7 @@ import { startDigestCron } from './services/digest';
 import path from 'path'
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 
   app.use(cors({
     origin: "https://dealsweb-production.up.railway.app",
@@ -54,8 +54,8 @@ app.use('/v1/assistant', assistantRoutes);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 connectDB().then(async () => {
-  app.listen(PORT, () => {
-    console.log(`server is running on ${PORT}`)
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
   });
   startPoller().catch((err) => {
     console.error('[Poller] failed to start — API will continue without it:', err);
