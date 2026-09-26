@@ -1,4 +1,5 @@
 import type { Deal } from '@deals/types';
+import { API_BASE_URL } from './client';
 
 export interface ChatMsg {
   role: 'user' | 'assistant';
@@ -55,7 +56,7 @@ export async function streamChat(
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch('/v1/assistant/chat', {
+    res = await fetch(`${API_BASE_URL}/assistant/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages }),

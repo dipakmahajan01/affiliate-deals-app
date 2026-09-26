@@ -1,7 +1,10 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/auth';
 
-export const api = axios.create({ baseURL: '/v1' });
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'https://dealsapi-production.up.railway.app/v1';
+
+export const api = axios.create({ baseURL: API_BASE_URL });
 
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
