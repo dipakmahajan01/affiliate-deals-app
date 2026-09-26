@@ -11,6 +11,6 @@ COPY ./turbo.json ./turbo.json
 RUN npm install 
 
 
-EXPOSE 8080
+EXPOSE 3000
 
 CMD ["pnpm", "run", "start:api"]

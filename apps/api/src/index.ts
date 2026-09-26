@@ -16,6 +16,7 @@ import path from 'path'
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+const HOST = '0.0.0.0';
 
 app.use(cors({
   origin: 'https://dealsweb-production.up.railway.app',
@@ -23,11 +24,12 @@ app.use(cors({
 }));
 
 
+app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
+
 // ✅ Static files FIRST
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // ✅ Catch-all for client-side routing LAST
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 
 
@@ -54,8 +56,8 @@ app.get('*', (req, res) => {
 });
 
 connectDB().then(async () => {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Server running on ${HOST}:${PORT}`);
   });
   startPoller().catch((err) => {
     console.error('[Poller] failed to start — API will continue without it:', err);

@@ -7,7 +7,7 @@
     "lint": "turbo run lint",
     "clean": "turbo run clean",
     "start:web": "cd apps/web && pnpm run build && pnpm run preview -- --host --port 3000",
-    "start:api": "cd apps/api && pnpm run dev",
+    "start:api": "cd apps/api && pnpm run build && pnpm run start",
     "start:admin": "cd apps/admin && pnpm run dev"
   },
   "devDependencies": {
