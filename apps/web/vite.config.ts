@@ -42,7 +42,7 @@
         "dealsapi-production.up.railway.app"
       ],
       proxy: {
-        '/v1': 'http://localhost:5000',
+        '/v1': 'http://localhost:3000',
       },
     },
     preview: {
