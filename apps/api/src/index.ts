@@ -15,21 +15,20 @@ import { startDigestCron } from './services/digest';
 import path from 'path'
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(cors({
-    origin: "https://dealsweb-production.up.railway.app",
-    credentials: true
-  }));
+app.use(cors({
+  origin: 'https://dealsweb-production.up.railway.app',
+  credentials: true,
+}));
 
 
 // ✅ Static files FIRST
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // ✅ Catch-all for client-side routing LAST
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
 
 
 
@@ -50,11 +49,12 @@ app.use('/v1/products', productRoutes);
 app.use('/v1/feed', feedRoutes);
 app.use('/v1/auth', authRoutes);
 app.use('/v1/assistant', assistantRoutes);
-
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 connectDB().then(async () => {
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
   startPoller().catch((err) => {
