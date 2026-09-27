@@ -39,7 +39,7 @@
         'dealdost.shop',
         'www.dealdost.shop',
         'dealsweb-production.up.railway.app',
-        "dealsapi-production.up.railway.app"
+        "api.dealdost.shop"
       ],
       proxy: {
         '/v1': 'http://localhost:3000',
@@ -51,7 +51,7 @@
         'dealdost.shop',
         'www.dealdost.shop',
         'dealsweb-production.up.railway.app',
-        "dealsapi-production.up.railway.app"
+        "api.dealdost.shop"
       ],
     },
   });
