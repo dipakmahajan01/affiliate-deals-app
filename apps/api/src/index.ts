@@ -19,7 +19,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
 
 app.use(cors({
-  origin: 'https://dealsweb-production.up.railway.app',
+  origin:"https://www.dealdost.shop",
   credentials: true,
 }));
 
