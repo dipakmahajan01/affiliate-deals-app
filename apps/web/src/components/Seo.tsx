@@ -1,6 +1,6 @@
 import { Helmet } from 'react-helmet-async';
 
-const SITE_URL = 'https://dealdost.shop';
+const SITE_URL = 'https://www.dealdost.shop';
 const SITE_NAME = 'DealDost';
 const DEFAULT_DESCRIPTION =
   'Best Amazon & Flipkart deals, handpicked from Telegram every day. Trending offers, price drops and daily discounts in one place.';
