@@ -34,6 +34,13 @@ export async function refreshActiveDeals(batchSize = BATCH_SIZE): Promise<{ refr
     const livePrice = scraped.price;
     const update: Record<string, unknown> = { scrape_status: 'success', scraped_at: now };
     if (scraped.rating != null) update.rating = scraped.rating;
+    if (scraped.review_count != null) update.review_count = scraped.review_count;
+    if (scraped.brand) update.brand = scraped.brand;
+    if (scraped.availability) update.availability = scraped.availability;
+    if (scraped.asin) update.asin = scraped.asin;
+    if (scraped.product_details) update.product_details = scraped.product_details;
+    if (scraped.breadcrumbs?.length) update.breadcrumbs = scraped.breadcrumbs;
+    if (scraped.images?.length) update.images = scraped.images;
     if (scraped.image_url) update.image_url = scraped.image_url;
     if (scraped.title?.trim()) update.product_title = scraped.title.trim();
     if (scraped.bank_offers?.length) update.bank_offers = scraped.bank_offers;

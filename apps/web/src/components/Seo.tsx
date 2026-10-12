@@ -1,6 +1,6 @@
 import { Helmet } from 'react-helmet-async';
 
-const SITE_URL = 'https://dealdost.shop';
+const SITE_URL = 'https://www.dealdost.shop';
 const SITE_NAME = 'DealDost';
 const DEFAULT_DESCRIPTION =
   'Best Amazon & Flipkart deals, handpicked from Telegram every day. Trending offers, price drops and daily discounts in one place.';
@@ -11,6 +11,8 @@ interface SeoProps {
   description?: string;
   path?: string;
   image?: string;
+  type?: 'website' | 'product';
+  keywords?: string[];
   noindex?: boolean;
   jsonLd?: Record<string, unknown> | Record<string, unknown>[];
 }
@@ -20,6 +22,8 @@ export default function Seo({
   description = DEFAULT_DESCRIPTION,
   path = '/',
   image = DEFAULT_IMAGE,
+  type = 'website',
+  keywords,
   noindex = false,
   jsonLd,
 }: SeoProps) {
@@ -31,10 +35,11 @@ export default function Seo({
     <Helmet>
       <title>{fullTitle}</title>
       <meta name="description" content={description} />
+      {keywords?.length ? <meta name="keywords" content={keywords.join(', ')} /> : null}
       <link rel="canonical" href={canonical} />
       {noindex && <meta name="robots" content="noindex, nofollow" />}
 
-      <meta property="og:type" content="website" />
+      <meta property="og:type" content={type} />
       <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />

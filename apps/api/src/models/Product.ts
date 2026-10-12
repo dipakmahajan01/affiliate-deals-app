@@ -27,6 +27,13 @@ export interface ProductDoc extends Document {
   // Scraped fields
   description?: string;
   rating?: number;
+  review_count?: number;
+  brand?: string;
+  availability?: string;
+  asin?: string;
+  product_details?: Record<string, string>;
+  breadcrumbs?: string[];
+  images?: string[];
   features?: string[];
   bank_offers?: string[];
   scrape_status: 'success' | 'failed' | 'pending';
@@ -61,6 +68,13 @@ const ProductSchema = new Schema<ProductDoc>(
     // Scraped fields
     description: String,
     rating: Number,
+    review_count: Number,
+    brand: String,
+    availability: String,
+    asin: String,
+    product_details: { type: Schema.Types.Mixed },
+    breadcrumbs: [String],
+    images: [String],
     features: [String],
     bank_offers: [String],
     scrape_status: { type: String, enum: ['success', 'failed', 'pending'], default: 'pending' },

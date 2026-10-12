@@ -6,6 +6,7 @@ import DigestDeals from './pages/DigestDeals';
 import Search from './pages/Search';
 import Trending from './pages/Trending';
 import PriceDrops from './pages/PriceDrops';
+import ProductDetails from './pages/ProductDetails';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Assistant from './pages/Assistant';
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/search" element={<Search />} />
           <Route path="/trending" element={<Trending />} />
           <Route path="/price-drops" element={<PriceDrops />} />
+          <Route path="/product/:slug" element={<ProductDetails />} />
           <Route path="/assistant" element={<Assistant />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
