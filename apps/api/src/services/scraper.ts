@@ -8,6 +8,13 @@ export interface ScrapedProduct {
   image_url?: string;
   description?: string;
   rating?: number;
+  review_count?: number;
+  brand?: string;
+  availability?: string;
+  asin?: string;
+  product_details?: Record<string, string>;
+  breadcrumbs?: string[];
+  images?: string[];
   price?: number;
   original_price?: number;
   features?: string[];
@@ -133,6 +140,29 @@ async function fetchMyntra(url: string): Promise<string | null> {
   return null;
 }
 
+async function fetchAmazonWithCrawlee(url: string): Promise<string | null> {
+  let html: string | null = null;
+  try {
+    const { CheerioCrawler } = await import('crawlee');
+    const crawler = new CheerioCrawler({
+      maxRequestsPerCrawl: 1,
+      requestHandlerTimeoutSecs: 30,
+      requestHandler: async ({ body }) => {
+        html = Buffer.isBuffer(body) ? body.toString('utf8') : String(body ?? '');
+      },
+    });
+    await crawler.run([
+      {
+        url,
+        headers: buildHeaders(url),
+      },
+    ]);
+  } catch {
+    return null;
+  }
+  return html;
+}
+
 function pickLargestDynamicImage(dataDynamic: string | undefined): string | undefined {
   if (!dataDynamic) return undefined;
   // Amazon often stores JSON with HTML entities: `{&quot;https://...&quot;:[679,679]}` — JSON.parse fails until decoded.
@@ -178,6 +208,16 @@ function parseAmazonRating($: CheerioAPI): number | undefined {
   }
 
   return undefined;
+}
+
+function parseAmazonReviewCount($: CheerioAPI): number | undefined {
+  const raw =
+    $('#acrCustomerReviewText').first().text().trim() ||
+    $('[data-hook="total-review-count"]').first().text().trim();
+  const m = raw.replace(/,/g, '').match(/\d+/);
+  if (!m) return undefined;
+  const n = parseInt(m[0], 10);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function parseAmazonPrice($: CheerioAPI): { price?: number; original_price?: number } {
@@ -230,6 +270,80 @@ function scrapeAmazonBankOffers($: CheerioAPI): string[] {
   });
 
   return lines.slice(0, 8);
+}
+
+function cleanAmazonText(raw: string | undefined | null): string | undefined {
+  const text = raw?.replace(/\s+/g, ' ').trim();
+  return text || undefined;
+}
+
+function parseAmazonAsin($: CheerioAPI, html: string, url?: string): string | undefined {
+  const fromInput = cleanAmazonText($('#ASIN').attr('value'));
+  if (fromInput) return fromInput;
+  const fromData = cleanAmazonText($('[data-asin]').filter((_, el) => !!$(el).attr('data-asin')).first().attr('data-asin'));
+  if (fromData) return fromData;
+  const fromHtml = html.match(/"asin"\s*:\s*"([A-Z0-9]{10})"/i)?.[1];
+  if (fromHtml) return fromHtml;
+  const fromUrl = url?.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i)?.[1];
+  return fromUrl;
+}
+
+function parseAmazonBreadcrumbs($: CheerioAPI): string[] | undefined {
+  const crumbs = $('#wayfinding-breadcrumbs_container a')
+    .map((_, el) => cleanAmazonText($(el).text()))
+    .get()
+    .filter(Boolean)
+    .slice(0, 8);
+  return crumbs.length ? crumbs : undefined;
+}
+
+function parseAmazonBrand($: CheerioAPI, productDetails: Record<string, string>, ldHints: Partial<ScrapedProduct>[]): string | undefined {
+  const byline = cleanAmazonText($('#bylineInfo').text());
+  if (byline) {
+    const cleaned = byline
+      .replace(/^Visit the\s+/i, '')
+      .replace(/\s+Store$/i, '')
+      .replace(/^Brand:\s*/i, '')
+      .trim();
+    if (cleaned) return cleaned;
+  }
+
+  if (productDetails.Brand) return productDetails.Brand;
+
+  return ldHints.find((h) => h.brand)?.brand;
+}
+
+function parseAmazonAvailability($: CheerioAPI): string | undefined {
+  const visibleAvailability = $('#availability').clone();
+  visibleAvailability.find('script, style').remove();
+  const visibleOutOfStock = $('#outOfStock').clone();
+  visibleOutOfStock.find('script, style').remove();
+  return cleanAmazonText(visibleAvailability.text()) || cleanAmazonText(visibleOutOfStock.text());
+}
+
+function addProductDetail(out: Record<string, string>, label: string | undefined, value: string | undefined): void {
+  const key = cleanAmazonText(label)?.replace(/[:：]+$/g, '').trim();
+  const val = cleanAmazonText(value);
+  if (!key || !val || key.length > 80 || val.length > 500) return;
+  if (!out[key]) out[key] = val;
+}
+
+function parseAmazonProductDetails($: CheerioAPI): Record<string, string> | undefined {
+  const details: Record<string, string> = {};
+
+  $('#productDetails_techSpec_section_1 tr, #productDetails_detailBullets_sections1 tr, table.prodDetTable tr')
+    .each((_, row) => {
+      addProductDetail(details, $(row).find('th').first().text(), $(row).find('td').first().text());
+    });
+
+  $('#detailBullets_feature_div li').each((_, li) => {
+    const label = $(li).find('.a-text-bold').first().text();
+    const full = $(li).text();
+    const value = full.replace(label, '');
+    addProductDetail(details, label, value);
+  });
+
+  return Object.keys(details).length ? details : undefined;
 }
 
 const AMAZON_IMAGE_JUNK =
@@ -286,7 +400,7 @@ function pickBestAmazonImageFromHtmlStrings(html: string, bucket: { url: string;
   while ((im = imgRe.exec(html)) !== null) considerAmazonImageCandidate(im[0], bucket);
 }
 
-function pickBestAmazonProductImage($: CheerioAPI, html: string): string | undefined {
+function getAmazonImageCandidates($: CheerioAPI, html: string): string[] {
   const bucket: { url: string; score: number }[] = [];
   const seen = new WeakSet<object>();
 
@@ -324,22 +438,44 @@ function pickBestAmazonProductImage($: CheerioAPI, html: string): string | undef
 
   pickBestAmazonImageFromHtmlStrings(html, bucket);
 
-  if (!bucket.length) return undefined;
+  if (!bucket.length) return [];
   bucket.sort((a, b) => b.score - a.score);
-  return normalizeHttpUrl(bucket[0].url);
+  return Array.from(new Set(bucket.map((item) => normalizeHttpUrl(item.url)).filter(Boolean) as string[])).slice(0, 8);
 }
 
-function scrapeAmazon(html: string): ScrapedProduct {
+function pickBestAmazonProductImage($: CheerioAPI, html: string): string | undefined {
+  return getAmazonImageCandidates($, html)[0];
+}
+
+function scrapeAmazon(html: string, url?: string): ScrapedProduct {
   const $ = cheerio.load(html);
 
   const title = $('#productTitle').text().trim() || undefined;
 
-  const image_url = pickBestAmazonProductImage($, html);
+  const images = getAmazonImageCandidates($, html);
+  const image_url = images[0];
 
   const description = $('#productDescription p').map((_, el) => $(el).text().trim()).get().filter(Boolean).join(' ') || undefined;
 
+  const ldHints: Partial<ScrapedProduct>[] = [];
+  $('script[type="application/ld+json"]').each((_, el) => {
+    const raw = $(el).html();
+    if (!raw?.trim()) return;
+    try {
+      collectJsonLdProductHints(JSON.parse(raw.trim()), ldHints);
+    } catch {
+      /* invalid JSON */
+    }
+  });
+
   const rating = parseAmazonRating($);
+  const review_count = parseAmazonReviewCount($);
   const { price, original_price } = parseAmazonPrice($);
+  const product_details = parseAmazonProductDetails($);
+  const brand = parseAmazonBrand($, product_details ?? {}, ldHints);
+  const availability = parseAmazonAvailability($);
+  const asin = parseAmazonAsin($, html, url);
+  const breadcrumbs = parseAmazonBreadcrumbs($);
 
   const features = $('#feature-bullets ul li span.a-list-item')
     .map((_, el) => $(el).text().trim())
@@ -354,6 +490,13 @@ function scrapeAmazon(html: string): ScrapedProduct {
     image_url,
     description,
     rating,
+    review_count,
+    brand,
+    availability,
+    asin,
+    product_details,
+    breadcrumbs,
+    images: images.length ? images : undefined,
     price,
     original_price,
     features: features.length ? features : undefined,
@@ -404,6 +547,12 @@ function productHintsFromJsonLdObject(o: Record<string, unknown>): Partial<Scrap
   if (typeof o.name === 'string' && o.name.trim()) hint.title = o.name.trim();
   if (typeof o.description === 'string' && o.description.trim()) {
     hint.description = o.description.replace(/\s+/g, ' ').trim().slice(0, 2000);
+  }
+  const brand = o.brand;
+  if (typeof brand === 'string' && brand.trim()) hint.brand = brand.trim();
+  else if (brand && typeof brand === 'object') {
+    const name = (brand as { name?: string }).name;
+    if (typeof name === 'string' && name.trim()) hint.brand = name.trim();
   }
   const img = normalizeSchemaImage(o.image);
   if (img) hint.image_url = img;
@@ -1031,7 +1180,7 @@ export async function scrapeProduct(url: string, source: DealSource): Promise<Sc
   let html: string | null = null;
   if (source === 'Flipkart') html = await fetchFlipkart(scrapingUrl);
   else if (source === 'Myntra') html = await fetchMyntra(scrapingUrl);
-  else html = await fetchWithRetry(scrapingUrl);
+  else html = (await fetchAmazonWithCrawlee(scrapingUrl)) ?? (await fetchWithRetry(scrapingUrl));
 
   if (!html) {
     return null;
@@ -1042,6 +1191,6 @@ export async function scrapeProduct(url: string, source: DealSource): Promise<Sc
   }
 
   const result =
-    source === 'Amazon' ? scrapeAmazon(html) : source === 'Flipkart' ? scrapeFlipkart(html) : scrapeMyntra(html);
+    source === 'Amazon' ? scrapeAmazon(html, scrapingUrl) : source === 'Flipkart' ? scrapeFlipkart(html) : scrapeMyntra(html);
   return result;
 }

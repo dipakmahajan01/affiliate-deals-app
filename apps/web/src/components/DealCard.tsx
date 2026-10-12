@@ -4,6 +4,7 @@ import type { Deal } from '@deals/types';
 import { useDealClick } from '../hooks/useDealClick';
 import CompareModal from './CompareModal';
 import { getProductPath } from '../utils/productSlug';
+import { cleanDisplayText, cleanOfferList } from '../utils/displayText';
 
 interface Props {
   deal: Deal;
@@ -46,6 +47,8 @@ export default function DealCard({ deal }: Props) {
   const [showCompare, setShowCompare] = useState(false);
   const handleDealClick = useDealClick();
   const productPath = getProductPath(deal);
+  const couponText = cleanDisplayText(deal.coupon_text);
+  const bankOffers = cleanOfferList(deal.bank_offers);
 
   async function handleBuy() {
     await handleDealClick(deal._id, deal.item_type === 'product' ? 'products' : 'deals');
@@ -165,18 +168,18 @@ export default function DealCard({ deal }: Props) {
         )}
 
         {/* Coupon */}
-        {deal.coupon_text && (
+        {couponText && (
           <div className="flex items-center gap-1.5 bg-amber-50 border border-dashed border-amber-300 text-amber-700 text-[11px] font-medium px-2 py-1.5 rounded-lg">
             <span className="shrink-0">🏷</span>
-            <span className="line-clamp-1">{deal.coupon_text}</span>
+            <span className="line-clamp-1">{couponText}</span>
           </div>
         )}
 
         {/* Bank offer */}
-        {deal.bank_offers && deal.bank_offers.length > 0 && (
+        {bankOffers.length > 0 && (
           <div className="flex items-start gap-1.5 bg-emerald-50 border border-emerald-100 text-emerald-700 text-[11px] px-2 py-1.5 rounded-lg">
             <span className="shrink-0">🏦</span>
-            <span className="line-clamp-2 leading-snug">{deal.bank_offers[0]}</span>
+            <span className="line-clamp-2 leading-snug">{bankOffers[0]}</span>
           </div>
         )}
 

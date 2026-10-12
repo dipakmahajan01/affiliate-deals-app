@@ -24,6 +24,13 @@ export interface Deal {
   price_drop_percent?: number;
   /** Present on scraped products (Amazon/Flipkart/Myntra detail pages). */
   rating?: number;
+  review_count?: number;
+  brand?: string;
+  availability?: string;
+  asin?: string;
+  product_details?: Record<string, string>;
+  breadcrumbs?: string[];
+  images?: string[];
   /** Short lines, e.g. Amazon bank discount cards. */
   bank_offers?: string[];
   category: string;
