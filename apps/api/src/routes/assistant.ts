@@ -4,7 +4,7 @@ import { searchProducts, ProductSearchParams } from '../services/productSearch';
 
 const router = Router();
 
-const MODEL = process.env.ASSISTANT_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.ASSISTANT_MODEL || 'gemini-3.8-flash';
 
 // Common categories in the catalog — surfaced to the model as a hint (not enforced).
 const CATEGORIES = ['Electronics', 'Kitchen', 'Fashion', 'Beauty', 'Books', 'Grocery', 'Sports', 'Home', 'General'];
@@ -71,6 +71,35 @@ function summarizeForModel(p: Record<string, unknown>) {
   };
 }
 
+function inferSearchParams(text: string): ProductSearchParams {
+  const lower = text.toLowerCase();
+  const maxPriceMatch =
+    lower.match(/(?:under|below|less than|upto|up to|within)\s*(?:rs\.?|₹|inr)?\s*(\d{2,7})/) ||
+    lower.match(/(?:rs\.?|₹|inr)\s*(\d{2,7})/);
+  const source = lower.includes('flipkart')
+    ? 'Flipkart'
+    : lower.includes('myntra')
+      ? 'Myntra'
+      : lower.includes('amazon')
+        ? 'Amazon'
+        : undefined;
+  const category = CATEGORIES.find((c) => lower.includes(c.toLowerCase()));
+  const query = text
+    .replace(/(?:under|below|less than|upto|up to|within)\s*(?:rs\.?|₹|inr)?\s*\d{2,7}/gi, ' ')
+    .replace(/(?:rs\.?|₹|inr)\s*\d{2,7}/gi, ' ')
+    .replace(/\b(amazon|flipkart|myntra)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return {
+    query: query || text,
+    category,
+    maxPrice: maxPriceMatch ? Number(maxPriceMatch[1]) : undefined,
+    source,
+    limit: 8,
+  };
+}
+
 // POST /v1/assistant/chat — Server-Sent Events stream (Google Gemini backend).
 // Events: `text` (token deltas), `deals` (cumulative product cards), `done`, `error`.
 router.post('/chat', async (req: Request, res: Response) => {
@@ -114,85 +143,60 @@ router.post('/chat', async (req: Request, res: Response) => {
   });
 
   try {
-    // Manual streaming tool-use loop: stream text to the client, run the tool server-side,
-    // feed results back, repeat until the model answers with no further function calls.
-    for (let step = 0; step < 6 && !aborted; step++) {
-      const stream = await ai.models.generateContentStream({
-        model: MODEL,
-        contents,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          tools: [{ functionDeclarations: [SEARCH_FUNCTION] }],
+    const latestUser = messages[messages.length - 1].content;
+    const products = (await searchProducts(inferSearchParams(latestUser))) as Record<string, unknown>[];
+    for (const p of products) dealsById.set(String(p._id), { ...p, item_type: 'product' });
+
+    const productContext =
+      products.length > 0
+        ? JSON.stringify(products.map(summarizeForModel), null, 2)
+        : 'No matching products found in the live catalog.';
+
+    const stream = await ai.models.generateContentStream({
+      model: MODEL,
+      contents: [
+        ...contents,
+        {
+          role: 'user',
+          parts: [
+            {
+              text: `Live catalog results for the user's request:\n${productContext}\n\nWrite a short shopping-assistant reply. Do not invent products or prices. If no products were found, suggest broadening the search.`,
+            },
+          ],
         },
-      });
+      ],
+      config: {
+        systemInstruction: SYSTEM_PROMPT.replace(
+          'To recommend any product you MUST call the `search_products` tool. Never invent products, prices, ratings or links — only ever discuss items returned by the tool.',
+          'Only discuss products included in the live catalog results supplied by the server. Never invent products, prices, ratings or links.'
+        ),
+      },
+    });
 
-      let turnText = '';
-      const calls: { name?: string; args?: Record<string, unknown> }[] = [];
-
-      for await (const chunk of stream) {
-        if (aborted) break;
-        const t = chunk.text;
-        if (t) {
-          turnText += t;
-          send('text', { delta: t });
-        }
-        const fcs = chunk.functionCalls;
-        if (fcs?.length) calls.push(...fcs);
-      }
+    for await (const chunk of stream) {
       if (aborted) break;
-
-      if (calls.length === 0) break;
-
-      // Record the model's turn (its function calls) so the next request has full context.
-      const modelParts: Record<string, unknown>[] = [];
-      if (turnText) modelParts.push({ text: turnText });
-      for (const c of calls) modelParts.push({ functionCall: c });
-      contents.push({ role: 'model', parts: modelParts });
-
-      // Execute every requested tool call and build the function responses.
-      const responseParts: Record<string, unknown>[] = [];
-      for (const call of calls) {
-        if (call.name !== 'search_products') {
-          responseParts.push({ functionResponse: { name: call.name ?? 'unknown', response: { error: 'Unknown tool.' } } });
-          continue;
-        }
-        const input = (call.args ?? {}) as ProductSearchParams;
-        const products = (await searchProducts({
-          query: input.query,
-          category: input.category,
-          maxPrice: input.maxPrice,
-          minRating: input.minRating,
-          source: input.source,
-          limit: 8,
-        })) as Record<string, unknown>[];
-
-        for (const p of products) {
-          dealsById.set(String(p._id), { ...p, item_type: 'product' });
-        }
-
-        responseParts.push({
-          functionResponse: {
-            name: 'search_products',
-            response:
-              products.length > 0
-                ? { products: products.map(summarizeForModel) }
-                : { products: [], note: 'No matching products found in the catalog.' },
-          },
-        });
-      }
-
-      // Surface cards as soon as we have them, before the model's final wording streams.
-      send('deals', { deals: Array.from(dealsById.values()) });
-
-      contents.push({ role: 'user', parts: responseParts });
+      const t = chunk.text;
+      if (t) send('text', { delta: t });
     }
 
     if (!aborted) {
+      send('deals', { deals: Array.from(dealsById.values()) });
       send('done', { deals: Array.from(dealsById.values()) });
     }
   } catch (err) {
     process.stderr.write(`[Assistant] ${err instanceof Error ? err.message : String(err)}\n`);
-    if (!aborted) send('error', { message: 'Assistant failed.' });
+    if (!aborted) {
+      const deals = Array.from(dealsById.values());
+      if (deals.length > 0) {
+        send('text', {
+          delta: 'I found matching live deals for you. The AI summary is temporarily unavailable, but you can compare the product cards below.',
+        });
+        send('deals', { deals });
+        send('done', { deals });
+      } else {
+        send('error', { message: 'Assistant failed.' });
+      }
+    }
   } finally {
     if (!aborted) res.end();
   }
